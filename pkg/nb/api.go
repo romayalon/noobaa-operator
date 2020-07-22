@@ -26,6 +26,7 @@ type Client interface {
 	CreateHostsPoolAPI(CreateHostsPoolParams) (string, error)
 	UpdateHostsPoolAPI(UpdateHostsPoolParams) error
 	CreateCloudPoolAPI(CreateCloudPoolParams) error
+	CreateNamespaceResourceAPI(CreateNamespaceResourceParams) error
 	CreateTierAPI(CreateTierParams) error
 	CreateTieringPolicyAPI(TieringPolicyInfo) error
 
@@ -206,6 +207,12 @@ func (c *RPCClient) UpdateHostsPoolAPI(params UpdateHostsPoolParams) error {
 // CreateCloudPoolAPI calls pool_api.create_cloud_pool()
 func (c *RPCClient) CreateCloudPoolAPI(params CreateCloudPoolParams) error {
 	req := &RPCMessage{API: "pool_api", Method: "create_cloud_pool", Params: params}
+	return c.Call(req, nil)
+}
+
+// CreateNamespaceResourceAPI calls pool_api.create_namespace_resource()
+func (c *RPCClient) CreateNamespaceResourceAPI(params CreateNamespaceResourceParams) error {
+	req := &RPCMessage{API: "pool_api", Method: "create_namespace_resource", Params: params}
 	return c.Call(req, nil)
 }
 
