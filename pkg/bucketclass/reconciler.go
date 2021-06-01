@@ -229,7 +229,7 @@ func (r *Reconciler) ReconcilePhaseVerifying() error {
 				}
 			}
 		}
-	} 
+	}
 	if r.BucketClass.Spec.NamespacePolicy != nil {
 		nspType := r.BucketClass.Spec.NamespacePolicy.Type
 		var namespaceStoresArr []string
@@ -261,7 +261,7 @@ func (r *Reconciler) ReconcilePhaseVerifying() error {
 			if nsStore.Status.Phase != nbv1.NamespaceStorePhaseReady {
 				return fmt.Errorf("NooBaa NamespaceStore %q is not yet ready", name)
 			}
-			if nsStore.Spec.Type == nbv1.NSStoreTypeNSFS && nspType != nbv1.NSBucketClassTypeSingle{
+			if nsStore.Spec.Type == nbv1.NSStoreTypeNSFS && nspType != nbv1.NSBucketClassTypeSingle {
 				return util.NewPersistentError("InvalidNamespaceStoreTypes", fmt.Sprintf("NSFS NamespaceStore %q is allowed on bucketclass of type Single", name))
 			}
 		}
@@ -389,7 +389,6 @@ func (r *Reconciler) updateNamespaceBucketClass(bucketNames []string) error {
 		}
 
 		for i := range bucketNames {
-
 			createBucketParams.Name = bucketNames[i]
 			err := r.NBClient.UpdateBucketAPI(*createBucketParams)
 
@@ -408,6 +407,10 @@ func (r *Reconciler) UpdateBucketClass(bucketNames []string) error {
 
 	if r.BucketClass == nil {
 		return fmt.Errorf("BucketClass not loaded %#v", r)
+	}
+
+	if err := r.updateBucketClassReplication(bucketNames); err != nil {
+		return err
 	}
 
 	if r.BucketClass.Spec.PlacementPolicy == nil &&
@@ -457,6 +460,38 @@ func (r *Reconciler) UpdateBucketClass(bucketNames []string) error {
 		// return fmt.Errorf("Failed to update bucket class %q with error: %v - Reverting back", r.BucketClass.Name, result.ErrorMessage)
 	}
 
+
+
 	log.Infof("✅ Successfully updated bucket class %q", r.BucketClass.Name)
+	return nil
+}
+
+
+// updateBucketClassReplication updates replication policy of all buckets that are assigned to a BucketClass 
+func (r *Reconciler) updateBucketClassReplication(bucketNames []string) error {
+	log := r.Logger
+
+	log.Infof("UpdateBucketClassReplication: %s", r.BucketClass.Spec.ReplicationPolicy)
+	params := nb.BucketReplicationParams{
+		Name: r.BucketClass.Name,
+		ReplicationPolicy: []interface{}{},
+	}
+	if r.BucketClass.Spec.ReplicationPolicy != "" {
+		replicationRules , err := util.LoadBucketReplicationJSON(r.BucketClass.Spec.ReplicationPolicy, options.Namespace)
+		if err != nil {
+				return err
+		}
+		params.ReplicationPolicy = replicationRules
+	}
+
+	err := r.NBClient.UpdateBucketClassReplicationAPI(params)
+	if err != nil {
+		rpcErr, isRPCErr := err.(*nb.RPCError)
+		if isRPCErr && rpcErr.RPCCode == "INVALID_REPLICATION_POLICY" {
+			return util.NewPersistentError("InvalidBucketReplication", "Bucket replication configuration is invalid")
+		}
+		return fmt.Errorf("Failed to update bucketclass replication on obc %q with error: %v", r.BucketClass.Name , err)
+	}
+	log.Infof("✅ Successfully updated bucketclass replication policy %q", r.BucketClass.Name)
 	return nil
 }
