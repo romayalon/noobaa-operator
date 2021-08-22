@@ -714,7 +714,7 @@ func CreateTieringStructure(PlacementPolicy nbv1.PlacementPolicy, BucketName str
 		Tiers: tiers,
 	})
 	if err != nil {
-		return tierName, fmt.Errorf("Failed to create tier %q with error: %v", tierName, err)
+		return tierName, fmt.Errorf("Failed to create tiering policy %q with error: %v", tierName, err)
 	}
 	return tierName, nil
 }

@@ -288,6 +288,9 @@ func LoadOperatorConf(cmd *cobra.Command) *Conf {
 	c.ClusterRole = util.KubeObject(bundle.File_deploy_cluster_role_yaml).(*rbacv1.ClusterRole)
 	c.ClusterRoleBinding = util.KubeObject(bundle.File_deploy_cluster_role_binding_yaml).(*rbacv1.ClusterRoleBinding)
 	c.Deployment = util.KubeObject(bundle.File_deploy_operator_yaml).(*appsv1.Deployment)
+	if (options.EnableCosi) {
+		c.Deployment = util.KubeObject(bundle.File_deploy_operator_cosi_yaml).(*appsv1.Deployment)
+	}
 
 	c.NS.Name = options.Namespace
 	c.SA.Namespace = options.Namespace

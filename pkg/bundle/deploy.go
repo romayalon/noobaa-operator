@@ -172,7 +172,8 @@ spec:
   bucketAccessClassName: my-bac
   bucketRequestName: my-br`
 
-const Sha256_deploy_cosi_bucket_class_yml = "b93878fbc3cee1b340c05a81f9a79a1d66eabfae7320d7a9681ad9703b5ef085"
+
+const Sha256_deploy_cosi_bucket_class_yaml = "d8a00ca74ddf9acf43871916beb5c33f69a512a5b6056173a2cc305ccb534531"
 
 const File_deploy_cosi_bucket_class_yml = `apiVersion: objectstorage.k8s.io/v1alpha1
 kind: BucketClass
@@ -189,7 +190,8 @@ protocol:
 parameters:
   policy: "{\"placementPolicy\":{\"tiers\":[{\"backingStores\":[\"noobaa-default-backing-store\"]}]}}"`
 
-const Sha256_deploy_cosi_bucket_request_yml = "21c3cd116e1fb695b0ce0e30340afc107a82fba46f576088336bdb9eb368cdfd"
+
+const Sha256_deploy_cosi_bucket_request_yaml = "dad8cefa879b332c78acc8189d01700f6e404c49acaa8f82e205183267ad386a"
 
 const File_deploy_cosi_bucket_request_yml = `apiVersion: objectstorage.k8s.io/v1alpha1
 kind: BucketRequest
@@ -198,6 +200,7 @@ metadata:
 spec:
   bucketPrefix: my-br
   bucketClassName: my-bc`
+
 
 const Sha256_deploy_crds_noobaa_io_backingstores_crd_yaml = "4e5794deec0a962fe42352d9fb56182f3e052d94a404277e084fdc47fed9ffd2"
 
@@ -5477,7 +5480,7 @@ spec:
                   fieldPath: metadata.namespace
 `
 
-const Sha256_deploy_operator_cosi_yaml = "38ae7305c61a2da399866e5f664442edf0ca2dd1f375c31162b4247f82cd42a6"
+const Sha256_deploy_operator_cosi_yaml = "a7a050a387417f9c9acb6f6f182cb679c6af3ee64b4341b4e2be1ffd25db1c82"
 
 const File_deploy_operator_cosi_yaml = `apiVersion: apps/v1
 kind: Deployment
@@ -5533,7 +5536,9 @@ spec:
                 fieldPath: metadata.namespace
           volumeMounts:
           - mountPath: /var/lib/cosi
-            name: socket`
+            name: socket
+
+`
 
 const Sha256_deploy_role_yaml = "ce3cbcb74a9309158d7cf71ef38e747fe76c1bc0fb0f15d3e5404a746ce988e1"
 
