@@ -384,7 +384,7 @@ const (
 
 	UpgradePhaseMigrate UpgradePhase = "Migrating"
 
-	UpgradePhaseClean UpgradePhase = "Cleanning"
+	UpgradePhaseClean UpgradePhase = "lala"
 
 	UpgradePhaseFinished UpgradePhase = "DoneUpgrade"
 )
