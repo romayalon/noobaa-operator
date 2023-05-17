@@ -2,7 +2,7 @@ package bundle
 
 const Version = "5.13.0"
 
-const Sha256_deploy_cluster_role_yaml = "b88a4dd75765daafbe629cb4ddf4ed5a795de9819039f0bedd395f7152f50d65"
+const Sha256_deploy_cluster_role_yaml = "d0bc03c8be7505950c0c6d830e8dc2e19a22df2268a22759fb6e8344135665f7"
 
 const File_deploy_cluster_role_yaml = `apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -109,6 +109,31 @@ rules:
     - get
     - list
     - watch
+  - apiGroups: 
+      - coordination.k8s.io
+    resources: 
+      - leases
+    verbs: 
+      - get
+      - watch
+      - list
+      - delete
+      - update
+      - create
+  - apiGroups: 
+      - objectstorage.k8s.io
+    resources: 
+      - buckets
+      - bucketaccesses
+      - buckets/status
+      - bucketaccesses/status
+    verbs: 
+      - get
+      - watch
+      - list
+      - delete
+      - update
+      - create
 `
 
 const Sha256_deploy_cluster_role_binding_yaml = "15c78355aefdceaf577bd96b4ae949ae424a3febdc8853be0917cf89a63941fc"
@@ -126,6 +151,53 @@ roleRef:
   kind: ClusterRole
   name: noobaa.noobaa.io
 `
+
+const Sha256_deploy_cosi_bucket_access_class_yaml = "39e224a6bedbc1592be4f851bc73498e04a947049cd2ec7bc3a80d221bafe9cf"
+
+const File_deploy_cosi_bucket_access_class_yaml = `apiVersion: objectstorage.k8s.io/v1alpha1
+kind: BucketAccessClass
+metadata:
+  name: my-bac
+policyActionsConfigMap:
+  name: policy-cm
+  namespace: jacky`
+
+const Sha256_deploy_cosi_bucket_access_request_yml = "734eff979ef850362970cc494dcd712c2f5a7901c0948e624a04be2a6aa92b86"
+
+const File_deploy_cosi_bucket_access_request_yml = `apiVersion: objectstorage.k8s.io/v1alpha1
+kind: BucketAccessRequest
+metadata:
+  name: my-bar
+spec:
+  bucketAccessClassName: my-bac
+  bucketRequestName: my-br`
+
+const Sha256_deploy_cosi_bucket_class_yml = "b93878fbc3cee1b340c05a81f9a79a1d66eabfae7320d7a9681ad9703b5ef085"
+
+const File_deploy_cosi_bucket_class_yml = `apiVersion: objectstorage.k8s.io/v1alpha1
+kind: BucketClass
+metadata:
+  name: my-bc
+provisioner: noobaa.objectstorage.k8s.io
+isDefaultBucketClass: true
+allowedNamespaces:
+- default
+protocol:
+  s3:
+    region: us-east-1
+    signatureVersion: S3V4
+parameters:
+  policy: "{\"placementPolicy\":{\"tiers\":[{\"backingStores\":[\"noobaa-default-backing-store\"]}]}}"`
+
+const Sha256_deploy_cosi_bucket_request_yml = "21c3cd116e1fb695b0ce0e30340afc107a82fba46f576088336bdb9eb368cdfd"
+
+const File_deploy_cosi_bucket_request_yml = `apiVersion: objectstorage.k8s.io/v1alpha1
+kind: BucketRequest
+metadata:
+  name: my-br
+spec:
+  bucketPrefix: my-br
+  bucketClassName: my-bc`
 
 const Sha256_deploy_crds_noobaa_io_backingstores_crd_yaml = "4e5794deec0a962fe42352d9fb56182f3e052d94a404277e084fdc47fed9ffd2"
 
@@ -5404,6 +5476,64 @@ spec:
                 fieldRef:
                   fieldPath: metadata.namespace
 `
+
+const Sha256_deploy_operator_cosi_yaml = "38ae7305c61a2da399866e5f664442edf0ca2dd1f375c31162b4247f82cd42a6"
+
+const File_deploy_operator_cosi_yaml = `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: noobaa-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      noobaa-operator: deployment
+  template:
+    metadata:
+      labels:
+        app: noobaa
+        noobaa-operator: deployment
+    spec:
+      serviceAccountName: noobaa
+      volumes:
+      - name: socket
+        emptyDir: {}
+      containers:
+        - name: noobaa-operator
+          image: NOOBAA_OPERATOR_IMAGE
+          resources:
+            limits:
+              cpu: "250m"
+              memory: "512Mi"
+          env:
+            - name: OPERATOR_NAME
+              value: noobaa-operator
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: WATCH_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+          - mountPath: /var/lib/cosi
+            name: socket
+        - name: objectstorage-provisioner-sidecar
+          image: COSI_SIDECAR_IMAGE
+          resources:
+            limits:
+              cpu: "250m"
+              memory: "512Mi"
+          imagePullPolicy: Always
+          env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          volumeMounts:
+          - mountPath: /var/lib/cosi
+            name: socket`
 
 const Sha256_deploy_role_yaml = "ce3cbcb74a9309158d7cf71ef38e747fe76c1bc0fb0f15d3e5404a746ce988e1"
 

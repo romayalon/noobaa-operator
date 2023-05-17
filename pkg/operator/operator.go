@@ -298,7 +298,9 @@ func LoadOperatorConf(cmd *cobra.Command) *Conf {
 	c.RoleBindingEndpoint.Namespace = options.Namespace
 	c.ClusterRole.Namespace = options.Namespace
 	c.Deployment.Namespace = options.Namespace
-
+	if options.EnableCosi {
+		c.Deployment = util.KubeObject(bundle.File_deploy_operator_cosi_yaml).(*appsv1.Deployment)
+	}
 	configureClusterRole(c.ClusterRole)
 	c.ClusterRoleBinding.Name = c.ClusterRole.Name
 	c.ClusterRoleBinding.RoleRef.Name = c.ClusterRole.Name
@@ -310,6 +312,9 @@ func LoadOperatorConf(cmd *cobra.Command) *Conf {
 	if options.ImagePullSecret != "" {
 		c.Deployment.Spec.Template.Spec.ImagePullSecrets =
 			[]corev1.LocalObjectReference{{Name: options.ImagePullSecret}}
+	}
+	if options.EnableCosi {
+		c.Deployment.Spec.Template.Spec.Containers[1].Image = options.CosiSideCarImage
 	}
 
 	return c
