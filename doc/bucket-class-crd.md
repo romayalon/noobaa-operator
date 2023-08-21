@@ -290,6 +290,8 @@ spec:
 Namespace bucketclass with replication to first.bucket:
 
 /path/to/json-file.json is the path to a JSON file which defines the replication policy
+see replication_json_example.json file as an example of a replication policy json file
+
 ```shell
 noobaa -n app-namespace bucketclass create namespace-bucketclass single bc --resource azure-blob-ns --replication-policy=/path/to/json-file.json
 ```

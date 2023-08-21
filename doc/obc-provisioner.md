@@ -84,6 +84,7 @@ Applications that require a bucket to have a specific replication policy can cre
 the `spec.additionalConfig.replication-policy` property.
 
 /path/to/json-file.json is the path to a JSON file which defines the replication policy
+see replication_json_example.json file as an example of a replication policy json file
 
 Example:
 

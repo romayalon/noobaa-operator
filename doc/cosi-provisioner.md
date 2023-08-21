@@ -145,6 +145,8 @@ parameters:
 
 The equivalent noobaa cli command - 
 /path/to/json-file.json is the path to a JSON file which defines the replication policy
+see replication_json_example.json file as an example of a replication policy json file
+
 ```shell
 noobaa cosi bucketclass create placement-bucketclass my-cosi-ns-bucket-class --backingstores noobaa-default-backing-store
 --replication-policy=/path/to/json-file.json

@@ -1,0 +1,11 @@
+{ 
+    "rules": [
+        {
+            "rule_id": "rule1", 
+            "destination_bucket": "first.bucket",
+            "filter": {
+                "prefix": ""
+            }
+        }
+    ]
+}
