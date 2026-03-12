@@ -149,7 +149,7 @@ gen-olm: gen
 		. $(VENV)/bin/activate && \
 		pip3 install --upgrade pip && \
 		pip3 install operator-courier==2.1.11 && \
-		pip3 install setuptools && \
+		pip3 install setuptools==81.0.0 && \
 		operator-courier --verbose verify --ui_validate_io $(OLM)
 	docker build -t $(CATALOG_IMAGE) -f build/catalog-source.Dockerfile .
 	@echo "✅ gen-olm"
