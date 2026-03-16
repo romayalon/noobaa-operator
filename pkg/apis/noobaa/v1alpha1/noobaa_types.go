@@ -665,6 +665,7 @@ type ServicesStatus struct {
 	// +optional
 	ServiceSts    ServiceStatus `json:"serviceSts,omitempty"`
 	ServiceIam    ServiceStatus `json:"serviceIam,omitempty"`
+	ServiceVector ServiceStatus `json:"serviceVector,omitempty"`
 	ServiceSyslog ServiceStatus `json:"serviceSyslog,omitempty"`
 }
 

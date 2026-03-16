@@ -1455,7 +1455,7 @@ spec:
       status: {}
 `
 
-const Sha256_deploy_crds_noobaa_io_noobaas_yaml = "623db090807771aa74ee98dd27627e2133c2c489dd28b2d81c209b05bbc81718"
+const Sha256_deploy_crds_noobaa_io_noobaas_yaml = "b72e3606f783de5c338e802d29e87aa33f13b75456fd08ad3eeb0db58998ff64"
 
 const File_deploy_crds_noobaa_io_noobaas_yaml = `---
 apiVersion: apiextensions.k8s.io/v1
@@ -3926,6 +3926,61 @@ spec:
                           type: string
                         type: array
                     type: object
+                  serviceVector:
+                    description: ServiceStatus is the status info and network addresses
+                      of a service
+                    properties:
+                      externalDNS:
+                        description: ExternalDNS are external public addresses for
+                          the service
+                        items:
+                          type: string
+                        type: array
+                      externalIP:
+                        description: |-
+                          ExternalIP are external public addresses for the service
+                          LoadBalancerPorts such as AWS ELB provide public address and load balancing for the service
+                          IngressPorts are manually created public addresses for the service
+                          https://kubernetes.io/docs/concepts/services-networking/service/#external-ips
+                          https://kubernetes.io/docs/concepts/services-networking/service/#loadbalancer
+                          https://kubernetes.io/docs/concepts/services-networking/ingress/
+                        items:
+                          type: string
+                        type: array
+                      internalDNS:
+                        description: InternalDNS are internal addresses of the service
+                          inside the cluster
+                        items:
+                          type: string
+                        type: array
+                      internalIP:
+                        description: |-
+                          InternalIP are internal addresses of the service inside the cluster
+                          https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
+                        items:
+                          type: string
+                        type: array
+                      nodePorts:
+                        description: |-
+                          NodePorts are the most basic network available.
+                          NodePorts use the networks available on the hosts of kubernetes nodes.
+                          This generally works from within a pod, and from the internal
+                          network of the nodes, but may fail from public network.
+                          https://kubernetes.io/docs/concepts/services-networking/service/#nodeport
+                        items:
+                          type: string
+                        type: array
+                      podPorts:
+                        description: |-
+                          PodPorts are the second most basic network address.
+                          Every pod has an IP in the cluster and the pods network is a mesh
+                          so the operator running inside a pod in the cluster can use this address.
+                          Note: pod IPs are not guaranteed to persist over restarts, so should be rediscovered.
+                          Note2: when running the operator outside of the cluster, pod IP is not accessible.
+                        items:
+                          type: string
+                        type: array
+                    type: object
                 required:
                 - serviceMgmt
                 - serviceS3
@@ -4174,7 +4229,7 @@ data:
     shared_preload_libraries = 'pg_stat_statements'
 `
 
-const Sha256_deploy_internal_deployment_endpoint_yaml = "d3b8bcceeb3aebd32bf39ac68c256cebc614b4338ecfb18095a4799d40956ed0"
+const Sha256_deploy_internal_deployment_endpoint_yaml = "eddf05a1e769432afac74380bc5ac135ee6b5903095bbd0ae27a265bd1d0f8d0"
 
 const File_deploy_internal_deployment_endpoint_yaml = `apiVersion: apps/v1
 kind: Deployment
@@ -4218,6 +4273,10 @@ spec:
         - name: iam-secret
           secret:
             secretName: noobaa-iam-serving-cert
+            optional: true
+        - name: vector-secret
+          secret:
+            secretName: noobaa-vector-serving-cert
             optional: true
         # This service account token can be used to provide identity outside the cluster.
         # For example, this token can be used with AWS(AssumeRoleWithWebIdentity)/Azure(WorkloadIdentityCredential) 
@@ -4263,6 +4322,8 @@ spec:
             - containerPort: 7443
             - containerPort: 13443
               name: iam-https
+            - containerPort: 14443
+              name: vector-https
           env:
             - name: NODE_NAME
               valueFrom:
@@ -4355,6 +4416,9 @@ spec:
               readOnly: true
             - name: sts-secret
               mountPath: /etc/sts-secret
+              readOnly: true
+            - name: vector-secret
+              mountPath: /etc/vector-secret
               readOnly: true
             # used for aws sts endpoint type
             - name: bound-sa-token
@@ -5135,6 +5199,26 @@ spec:
   wildcardPolicy: None
 `
 
+const Sha256_deploy_internal_route_vector_yaml = "1e17dcc6116d80f9fe34938a5503d3f1ca17ee08ffa78678bd89b23226d2bdf4"
+
+const File_deploy_internal_route_vector_yaml = `apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  labels:
+    app: noobaa
+  name: vector
+spec:
+  port:
+    targetPort: vector-https
+  tls:
+    termination: reencrypt
+  to:
+    kind: Service
+    name: vector
+    weight: 100
+  wildcardPolicy: None
+`
+
 const Sha256_deploy_internal_secret_empty_yaml = "d63aaeaf7f9c7c1421fcc138ee2f31d2461de0dec2f68120bc9cce367d4d4186"
 
 const File_deploy_internal_secret_empty_yaml = `apiVersion: v1
@@ -5291,6 +5375,28 @@ spec:
       port: 514
       name: syslog
       targetPort: 5140
+`
+
+const Sha256_deploy_internal_service_vector_yaml = "1fade2b4902b4a0cc7de4891830136b0db67066c62c158878c8f2a3d8bea7e0c"
+
+const File_deploy_internal_service_vector_yaml = `apiVersion: v1
+kind: Service
+metadata:
+  name: vector
+  labels:
+    app: noobaa
+    noobaa-vector-svc: "true"
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: 'noobaa-vector-serving-cert'
+    service.alpha.openshift.io/serving-cert-secret-name: 'noobaa-vector-serving-cert'
+spec:
+  type: LoadBalancer
+  selector:
+    noobaa-s3: SYSNAME
+  ports:
+    - port: 443
+      targetPort: vector-https
+      name: vector-https
 `
 
 const Sha256_deploy_internal_service_admission_webhook_yaml = "810a70b263d44621713864aa6e6e72e6079bbdc02f6e2b9143ba9ebf4ab52102"

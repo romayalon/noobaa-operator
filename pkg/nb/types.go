@@ -823,3 +823,45 @@ func UInt64ToBigInt(value uint64) BigInt {
 		N:    int64(value % petaInBytes),
 	}
 }
+
+// CreateVectorBucketParams is the params for bucket_api.create_vector_bucket()
+type CreateVectorBucketParams struct {
+	Name           string                   `json:"name"`
+	VectorDBType   string                   `json:"vector_db_type,omitempty"`
+	Resource       *NamespaceResourceFullConfig `json:"resource,omitempty"`
+	VectorDBConfig *VectorDBConfig              `json:"vector_db_config,omitempty"`
+	BucketClaim    *BucketClaimInfo             `json:"bucket_claim,omitempty"`
+}
+
+// VectorDBConfig holds engine-specific configuration for a vector bucket.
+// Currently only LanceDB is supported. Davinci and OpenSearch configs
+// can be added here in the future.
+type VectorDBConfig struct {
+	// +optional
+	LanceDBConfig *LanceDBConfigParam `json:"lance_db_config,omitempty"`
+	// +optional - future: DavinciConfig *DavinciConfigParam `json:"davinci_config,omitempty"`
+	// +optional - future: OpenSearchConfig *OpenSearchConfigParam `json:"opensearch_config,omitempty"`
+}
+
+// LanceDBConfigParam holds LanceDB-specific configuration for the RPC (optional)
+type LanceDBConfigParam struct {
+	SubPath string `json:"sub_path,omitempty"`
+}
+
+// LanceConfig is the JSON structure stored in OBC additionalConfig["lanceConfig"].
+// Extensible for future LanceDB-specific settings.
+type LanceConfig struct {
+	SubPath string `json:"subPath,omitempty"`
+}
+
+// DeleteVectorBucketParams is the params for bucket_api.delete_vector_bucket()
+type DeleteVectorBucketParams struct {
+	Name string `json:"name"`
+}
+
+// VectorBucketInfo is the info returned for a vector bucket
+type VectorBucketInfo struct {
+	Name         string `json:"name"`
+	VectorDBType string `json:"vector_db_type,omitempty"`
+	CreationTime int64  `json:"creation_time,omitempty"`
+}

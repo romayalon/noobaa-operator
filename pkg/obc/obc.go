@@ -66,6 +66,12 @@ func CmdCreate() *cobra.Command {
 		"Set quota max objects quantity config to requested bucket")
 	cmd.Flags().String("max-size", "",
 		"Set quota max size config to requested bucket")
+	cmd.Flags().String("bucket-type", "",
+		"Set bucket type: 'data' (default) or 'vector'")
+	cmd.Flags().String("vector-db-type", "",
+		"Set vector DB engine type: 'lance' (default), 'davinci'")
+	cmd.Flags().String("lance-config", "",
+		"Set LanceDB configuration as JSON (e.g. '{\"subPath\":\"embeddings\"}')")
 	return cmd
 }
 
@@ -233,6 +239,27 @@ func RunCreate(cmd *cobra.Command, args []string) {
 	}
 	if maxObjects != "" {
 		obc.Spec.AdditionalConfig["maxObjects"] = maxObjects
+	}
+
+	bucketType, _ := cmd.Flags().GetString("bucket-type")
+	vectorDBType, _ := cmd.Flags().GetString("vector-db-type")
+	lanceConfigFlag, _ := cmd.Flags().GetString("lance-config")
+
+	if bucketType != "" {
+		obc.Spec.AdditionalConfig["bucketType"] = bucketType
+	}
+	if vectorDBType != "" {
+		obc.Spec.AdditionalConfig["vectorDBType"] = vectorDBType
+	}
+	if lanceConfigFlag != "" {
+		if vectorDBType != "" && vectorDBType != "lance" {
+			log.Fatalf(`❌ --lance-config can only be used with --vector-db-type=lance`)
+		}
+		var lanceConfig nb.LanceConfig
+		if err := json.Unmarshal([]byte(lanceConfigFlag), &lanceConfig); err != nil {
+			log.Fatalf(`❌ Invalid --lance-config JSON: %v`, err)
+		}
+		obc.Spec.AdditionalConfig["lanceConfig"] = lanceConfigFlag
 	}
 
 	err := ValidateOBC(obc, true)
@@ -430,7 +457,8 @@ func RunStatus(cmd *cobra.Command, args []string) {
 		util.Logger().Fatalf("❌ %s", err)
 	}
 	var b *nb.BucketInfo
-	if obc.Spec.BucketName != "" {
+	isVector := ob.Spec.AdditionalState != nil && ob.Spec.AdditionalState["bucketType"] == "vector"
+	if obc.Spec.BucketName != "" && !isVector {
 		nbClient := sysClient.NBClient
 		bucket, err := nbClient.ReadBucketAPI(nb.ReadBucketParams{Name: obc.Spec.BucketName})
 		if err == nil {
@@ -447,6 +475,10 @@ func RunStatus(cmd *cobra.Command, args []string) {
 	fmt.Printf("  %-22s : kubectl get objectbucket %s\n", "ObjectBucket", ob.Name)
 	fmt.Printf("  %-22s : kubectl get storageclass %s\n", "StorageClass", sc.Name)
 	fmt.Printf("  %-22s : kubectl get -n %s bucketclass %s\n", "BucketClass", bucketClass.Namespace, bucketClass.Name)
+	if isVector {
+		fmt.Printf("  %-22s : %s\n", "Bucket Type", "vector")
+		fmt.Printf("  %-22s : %s\n", "Vector DB Type", ob.Spec.AdditionalState["vectorDBType"])
+	}
 	fmt.Printf("\n")
 	fmt.Printf("Connection info:\n")
 	for k, v := range cm.Data {
@@ -470,6 +502,17 @@ func RunStatus(cmd *cobra.Command, args []string) {
 	fmt.Printf("Shell commands:\n")
 	fmt.Printf("  %-22s : alias s3='%saws s3 --no-verify-ssl --endpoint-url %s'\n", "AWS S3 Alias", credsEnv, sysClient.S3URL.String())
 	fmt.Printf("\n")
+	if isVector {
+		vectorSvc := sysClient.NooBaa.Status.Services.ServiceVector
+		fmt.Printf("Vector service info:\n")
+		for _, addr := range vectorSvc.InternalDNS {
+			fmt.Printf("  %-22s : %s\n", "Internal DNS", addr)
+		}
+		for _, addr := range vectorSvc.ExternalDNS {
+			fmt.Printf("  %-22s : %s\n", "External DNS", addr)
+		}
+		fmt.Printf("\n")
+	}
 	if b != nil {
 		fmt.Printf("Bucket status:\n")
 		fmt.Printf("  %-22s : %s\n", "Name", b.Name)
@@ -513,6 +556,7 @@ func RunList(cmd *cobra.Command, args []string) {
 		"BUCKET-NAME",
 		"STORAGE-CLASS",
 		"BUCKET-CLASS",
+		"BUCKET-TYPE",
 		"PHASE",
 	)
 	scMap := map[string]*storagev1.StorageClass{}
@@ -538,12 +582,17 @@ func RunList(cmd *cobra.Command, args []string) {
 			}
 			bucketClass = sc.Parameters["bucketclass"]
 		}
+		bucketType := "object"
+		if obc.Spec.AdditionalConfig["bucketType"] == "vector" {
+			bucketType = "vector"
+		}
 		table.AddRow(
 			obc.Namespace,
 			obc.Name,
 			obc.Spec.BucketName,
 			obc.Spec.StorageClassName,
 			bucketClass,
+			bucketType,
 			string(obc.Status.Phase),
 		)
 	}

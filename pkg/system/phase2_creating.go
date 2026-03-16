@@ -89,6 +89,14 @@ func (r *Reconciler) ReconcilePhaseCreating() error {
 			return err
 		}
 	}
+	if err := r.ReconcileObject(r.ServiceVector, r.SetDesiredServiceVector); err != nil {
+		return err
+	}
+	if !r.NooBaa.Spec.DisableRoutes {
+		if err := r.ReconcileObjectOptional(r.RouteVector, nil); err != nil {
+			return err
+		}
+	}
 	// the credentials that are created by cloud-credentials-operator sometimes take time
 	// to be valid (requests sometimes returns InvalidAccessKeyId for 1-2 minutes)
 	// creating the credential request as early as possible to try and avoid it
@@ -290,6 +298,21 @@ func (r *Reconciler) SetDesiredServiceIam() error {
 		r.ServiceIam.Spec.LoadBalancerSourceRanges = r.NooBaa.Spec.LoadBalancerSourceSubnets.IAM
 	}
 	r.ServiceIam.Spec.Selector["noobaa-s3"] = r.Request.Name
+	return nil
+}
+
+// SetDesiredServiceVector updates the ServiceVector as desired for reconciling
+func (r *Reconciler) SetDesiredServiceVector() error {
+	if r.NooBaa.Spec.DisableLoadBalancerService {
+		r.ServiceVector.Spec.Type = corev1.ServiceTypeClusterIP
+		r.ServiceVector.Spec.LoadBalancerSourceRanges = []string{}
+	} else {
+		r.ServiceVector.Spec.Type = corev1.ServiceTypeLoadBalancer
+	}
+	// "noobaa-s3" is the shared pod selector label for the endpoint deployment.
+	// All endpoint services (S3, STS, IAM, Vector) target the same pods, which
+	// is why they all use this selector despite the misleading label name.
+	r.ServiceVector.Spec.Selector["noobaa-s3"] = r.Request.Name
 	return nil
 }
 

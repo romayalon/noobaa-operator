@@ -1700,6 +1700,7 @@ func (in *ServicesStatus) DeepCopyInto(out *ServicesStatus) {
 	in.ServiceS3.DeepCopyInto(&out.ServiceS3)
 	in.ServiceSts.DeepCopyInto(&out.ServiceSts)
 	in.ServiceIam.DeepCopyInto(&out.ServiceIam)
+	in.ServiceVector.DeepCopyInto(&out.ServiceVector)
 	in.ServiceSyslog.DeepCopyInto(&out.ServiceSyslog)
 	return
 }

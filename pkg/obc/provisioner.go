@@ -18,6 +18,7 @@ import (
 	"github.com/noobaa/noobaa-operator/v5/pkg/options"
 	"github.com/noobaa/noobaa-operator/v5/pkg/system"
 	"github.com/noobaa/noobaa-operator/v5/pkg/util"
+	"github.com/noobaa/noobaa-operator/v5/pkg/validations"
 
 	"github.com/kube-object-storage/lib-bucket-provisioner/pkg/provisioner"
 	obAPI "github.com/kube-object-storage/lib-bucket-provisioner/pkg/provisioner/api"
@@ -458,6 +459,11 @@ func (r *BucketRequest) CreateAndUpdateBucket(
 		}
 	}
 
+	// Vector bucket: separate provisioning path via dedicated RPC
+	if isVectorBucket(r.OBC.Spec.AdditionalConfig) {
+		return r.createVectorBucket(log)
+	}
+
 	createBucketParams := &nb.CreateBucketParams{
 		Name: r.BucketName,
 		BucketClaim: &nb.BucketClaimInfo{
@@ -721,11 +727,26 @@ func (r *BucketRequest) DeleteAccount() error {
 // DeleteBucket deletes the obc bucket **including data**
 func (r *BucketRequest) DeleteBucket() error {
 
-	// TODO delete bucket data!!!
 	var err error
 	log := r.Provisioner.Logger
 	log.Infof("deleting bucket %q", r.BucketName)
-	if r.BucketClass.Spec.NamespacePolicy != nil {
+
+	if r.OB != nil && r.OB.Spec.AdditionalState != nil && isVectorBucket(r.OB.Spec.AdditionalState) {
+		// TODO delete bucket data!!!
+		err = r.SysClient.NBClient.DeleteVectorBucketAPI(nb.DeleteVectorBucketParams{Name: r.BucketName})
+		if err != nil {
+			if nbErr, ok := err.(*nb.RPCError); ok && nbErr.RPCCode == "NO_SUCH_BUCKET" {
+				log.Warnf("Vector bucket to delete was not found %q", r.BucketName)
+			} else {
+				return fmt.Errorf("failed to delete vector bucket %q: %v", r.BucketName, err)
+			}
+		} else {
+			log.Infof("✅ Successfully deleted vector bucket %q", r.BucketName)
+		}
+		return nil
+	}
+
+	if r.BucketClass != nil && r.BucketClass.Spec.NamespacePolicy != nil {
 		err = r.SysClient.NBClient.DeleteBucketAPI(nb.DeleteBucketParams{Name: r.BucketName})
 	} else {
 		err = r.SysClient.NBClient.DeleteBucketAndObjectsAPI(nb.DeleteBucketParams{Name: r.BucketName})
@@ -742,6 +763,105 @@ func (r *BucketRequest) DeleteBucket() error {
 	}
 
 	return nil
+}
+
+// isVectorBucket returns true if the config indicates a vector bucket,
+// either by explicit bucketType=vector or by specifying a vectorDBType (lance, davinci).
+func isVectorBucket(config map[string]string) bool {
+	if config["bucketType"] == "vector" {
+		return true
+	}
+	vdbType := config["vectorDBType"]
+	return vdbType == "lance" || vdbType == "davinci"
+}
+
+// createVectorBucket provisions a vector bucket using the dedicated RPC.
+// It follows the existing BucketClass -> NamespacePolicy -> Single -> Resource chain
+// to find the NamespaceStore, then extracts vector DB configuration from it.
+//
+// Constraints:
+//   - BucketClass must have NamespacePolicy of type Single
+//   - The referenced NamespaceStore must be of type NSFS (S3 and others may be supported in the future)
+func (r *BucketRequest) createVectorBucket(log *logrus.Entry) error {
+	if err := validations.ValidateVectorBucketBucketClass(r.BucketClass); err != nil {
+		return err
+	}
+
+	nsStoreName := r.BucketClass.Spec.NamespacePolicy.Single.Resource
+	nsStore := &nbv1.NamespaceStore{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      nsStoreName,
+			Namespace: r.BucketClass.Namespace,
+		},
+	}
+	if !util.KubeCheck(nsStore) {
+		nsStore.Namespace = r.Provisioner.Namespace
+		if !util.KubeCheck(nsStore) {
+			return fmt.Errorf("NamespaceStore %q not found", nsStoreName)
+		}
+	}
+
+	if err := validations.ValidateVectorBucketNamespaceStore(nsStore); err != nil {
+		return err
+	}
+
+	vectorDBType := r.OBC.Spec.AdditionalConfig["vectorDBType"]
+	if vectorDBType == "" {
+		vectorDBType = "lance"
+	}
+
+	vectorParams := nb.CreateVectorBucketParams{
+		Name:         r.BucketName,
+		VectorDBType: vectorDBType,
+		Resource: &nb.NamespaceResourceFullConfig{
+			Resource: nsStore.Name,
+			Path:     r.OBC.Spec.AdditionalConfig["subPath"],
+		},
+		BucketClaim: &nb.BucketClaimInfo{
+			BucketClass: r.BucketClass.Name,
+			Namespace:   r.OBC.Namespace,
+		},
+	}
+
+	dbConfig, err := buildVectorDBConfig(vectorDBType, r.OBC.Spec.AdditionalConfig)
+	if err != nil {
+		return err
+	}
+	vectorParams.VectorDBConfig = dbConfig
+
+	_, err = r.SysClient.NBClient.CreateVectorBucketAPI(vectorParams)
+	if err != nil {
+		return fmt.Errorf("failed to create vector bucket %q: %v", r.BucketName, err)
+	}
+
+	r.OB.Spec.AdditionalState["bucketType"] = "vector"
+	r.OB.Spec.AdditionalState["vectorDBType"] = vectorDBType
+
+	log.Infof("✅ Successfully created vector bucket %q (vectorDBType=%s, nsstore=%s)", r.BucketName, vectorDBType, nsStore.Name)
+	return r.UpdateBucket()
+}
+
+// buildVectorDBConfig returns engine-specific VectorDBConfig based on the vectorDBType
+// and OBC additionalConfig. Returns nil and no error if no engine-specific config is needed.
+func buildVectorDBConfig(vectorDBType string, additionalConfig map[string]string) (*nb.VectorDBConfig, error) {
+	switch vectorDBType {
+	case "lance":
+		lanceConfigJSON := additionalConfig["lanceConfig"]
+		if lanceConfigJSON == "" {
+			return nil, nil
+		}
+		var lanceConfig nb.LanceConfig
+		if err := json.Unmarshal([]byte(lanceConfigJSON), &lanceConfig); err != nil {
+			return nil, fmt.Errorf("invalid lanceConfig JSON: %v", err)
+		}
+		if lanceConfig.SubPath != "" {
+			return &nb.VectorDBConfig{
+				LanceDBConfig: &nb.LanceDBConfigParam{SubPath: lanceConfig.SubPath},
+			}, nil
+		}
+	// TODO: add davinci, opensearch cases here
+	}
+	return nil, nil
 }
 
 // PrepareReplicationParams validates and prepare the replication params

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vector
+  labels:
+    app: noobaa
+    noobaa-vector-svc: "true"
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: 'noobaa-vector-serving-cert'
+    service.alpha.openshift.io/serving-cert-secret-name: 'noobaa-vector-serving-cert'
+spec:
+  type: LoadBalancer
+  selector:
+    noobaa-s3: SYSNAME
+  ports:
+    - port: 443
+      targetPort: vector-https
+      name: vector-https

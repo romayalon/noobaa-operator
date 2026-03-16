@@ -157,6 +157,53 @@ func ValidateNamespacePolicy(namespacePolicy *nbv1.NamespacePolicy, namespace st
 	return nil
 }
 
+// ValidateVectorBucketBucketClass validates that a BucketClass used for vector buckets
+// has a NamespacePolicy of type Single pointing to a NamespaceStore.
+// The provisioner performs additional checks (NamespaceStore existence with namespace
+// fallback, and NSFS type enforcement).
+func ValidateVectorBucketBucketClass(bc *nbv1.BucketClass) error {
+	if bc.Spec.NamespacePolicy == nil {
+		return util.ValidationError{
+			Msg: "vector bucket requires a BucketClass with a NamespacePolicy",
+		}
+	}
+	if bc.Spec.NamespacePolicy.Type != nbv1.NSBucketClassTypeSingle {
+		return util.ValidationError{
+			Msg: fmt.Sprintf(
+				"vector bucket requires a BucketClass with NamespacePolicy of type Single, got %q",
+				bc.Spec.NamespacePolicy.Type,
+			),
+		}
+	}
+	if bc.Spec.NamespacePolicy.Single == nil || bc.Spec.NamespacePolicy.Single.Resource == "" {
+		return util.ValidationError{
+			Msg: "vector bucket BucketClass NamespacePolicy Single must reference a NamespaceStore resource",
+		}
+	}
+	return nil
+}
+
+// ValidateVectorBucketNamespaceStore validates that a NamespaceStore used for
+// vector buckets is of a supported type.
+// Currently only NSFS is supported; S3 and other types may be added in the future.
+func ValidateVectorBucketNamespaceStore(nsStore *nbv1.NamespaceStore) error {
+	if nsStore.Spec.Type != nbv1.NSStoreTypeNSFS {
+		return util.ValidationError{
+			Msg: fmt.Sprintf(
+				"vector bucket currently requires an NSFS NamespaceStore, but %q is of type %q"+
+					" (S3 and other types may be supported in the future)",
+				nsStore.Name, nsStore.Spec.Type,
+			),
+		}
+	}
+	if nsStore.Spec.NSFS == nil {
+		return util.ValidationError{
+			Msg: fmt.Sprintf("NamespaceStore %q is of type NSFS but has no NSFS configuration", nsStore.Name),
+		}
+	}
+	return nil
+}
+
 // ValidateNSFSSingleBC validates that bucketclass configured to NS of type NSFS it will only be of type Single.
 func ValidateNSFSSingleBC(bc *nbv1.BucketClass) error {
 	if bc.Spec.NamespacePolicy.Type == nbv1.NSBucketClassTypeSingle {
