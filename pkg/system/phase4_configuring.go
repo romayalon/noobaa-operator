@@ -449,6 +449,12 @@ func (r *Reconciler) SetDesiredDeploymentEndpoint() error {
 					} else {
 						c.Env[j].Value = ""
 					}
+			case "TLS_MIN_VERSION":
+				c.Env[j].Value = MapTLSVersion(r.NooBaa.Spec.Security.APIServerSecurity.TLSMinVersion)
+			case "TLS_CIPHERS":
+				c.Env[j].Value = strings.Join(r.NooBaa.Spec.Security.APIServerSecurity.TLSCiphers, ":")
+			case "TLS_GROUPS":
+				c.Env[j].Value = JoinTLSGroups(r.NooBaa.Spec.Security.APIServerSecurity.TLSGroups, ":")
 				}
 			}
 
@@ -2045,6 +2051,30 @@ func derefAzureBlobString(p *string) string {
 		return ""
 	}
 	return *p
+}
+
+// MapTLSVersion converts a TLSProtocolVersion pointer to the Node.js minVersion string.
+func MapTLSVersion(v *nbv1.TLSProtocolVersion) string {
+	if v == nil {
+		return ""
+	}
+	switch *v {
+	case nbv1.TLSVersionTLS12:
+		return "TLSv1.2"
+	case nbv1.TLSVersionTLS13:
+		return "TLSv1.3"
+	default:
+		return ""
+	}
+}
+
+// JoinTLSGroups joins a slice of TLSGroup values into a separator-delimited string.
+func JoinTLSGroups(groups []nbv1.TLSGroup, sep string) string {
+	s := make([]string, len(groups))
+	for i, g := range groups {
+		s[i] = string(g)
+	}
+	return strings.Join(s, sep)
 }
 
 // reconcileEndpointRBAC creates Endpoint scc, role, rolebinding and service account

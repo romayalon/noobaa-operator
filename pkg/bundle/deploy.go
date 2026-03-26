@@ -3416,6 +3416,41 @@ spec:
               security:
                 description: Security represents security settings
                 properties:
+                  apiServerSecurity:
+                    description: APIServerSecurity specifies the TLS configuration
+                      derived from the OpenShift API Server TLS profile. The
+                      StorageCluster propagates the platform TLS profile here and
+                      NooBaa applies it to endpoint HTTPS servers.
+                    properties:
+                      tlsCiphers:
+                        description: TLSCiphers is used to specify the cipher
+                          algorithms that are negotiated during the TLS handshake.
+                        items:
+                          type: string
+                        type: array
+                      tlsGroups:
+                        description: TLSGroups is used to specify the
+                          key exchange groups for the TLS
+                          handshake.
+                        items:
+                          enum:
+                          - X25519
+                          - secp256r1
+                          - secp384r1
+                          - secp521r1
+                          - X25519MLKEM768
+                          type: string
+                        type: array
+                      tlsMinVersion:
+                        description: TLSMinVersion is used to specify the minimal
+                          version of the TLS protocol that is negotiated during the
+                          TLS handshake.
+                        enum:
+                        - VersionTLS12
+                        - VersionTLS13
+                        nullable: true
+                        type: string
+                    type: object
                   kms:
                     description: KeyManagementServiceSpec represent various details
                       of the KMS server
@@ -4354,6 +4389,9 @@ spec:
             - name: LOCAL_N2N_AGENT
             - name: NODE_EXTRA_CA_CERTS
             - name: GUARANTEED_LOGS_PATH
+            - name: TLS_MIN_VERSION
+            - name: TLS_CIPHERS
+            - name: TLS_GROUPS
             - name: CONTAINER_CPU_REQUEST
               valueFrom:
                 resourceFieldRef:
