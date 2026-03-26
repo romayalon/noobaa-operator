@@ -259,6 +259,41 @@ var _ = Describe("Admission server integration tests", func() {
 				Expect(err.Error()).To(Equal("admission webhook \"admissionwebhook.noobaa.io\" denied the request: Invalid Namespacestore type, please provide a valid Namespacestore type"))
 			})
 		})
+		Context("VectorPolicy with PlacementPolicy", func() {
+			It("Should Deny", func() {
+				testBucketclass.Spec.VectorPolicy = &nbv1.VectorPolicy{
+					Resource:     "ns-store",
+					VectorDBType: nbv1.VectorDBTypeLance,
+				}
+				testBucketclass.Spec.PlacementPolicy = &nbv1.PlacementPolicy{
+					Tiers: []nbv1.Tier{{
+						BackingStores: []string{"bs-name"},
+					}},
+				}
+
+				result, err = KubeCreate(testBucketclass)
+				Expect(result).To(BeFalse())
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("VectorPolicy cannot be used together with PlacementPolicy or NamespacePolicy"))
+			})
+		})
+		Context("VectorPolicy with NamespacePolicy", func() {
+			It("Should Deny", func() {
+				testBucketclass.Spec.VectorPolicy = &nbv1.VectorPolicy{
+					Resource:     "ns-store",
+					VectorDBType: nbv1.VectorDBTypeLance,
+				}
+				testBucketclass.Spec.NamespacePolicy = &nbv1.NamespacePolicy{
+					Type:   nbv1.NSBucketClassTypeSingle,
+					Single: &nbv1.SingleNamespacePolicy{Resource: "ns-store"},
+				}
+
+				result, err = KubeCreate(testBucketclass)
+				Expect(result).To(BeFalse())
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("VectorPolicy cannot be used together with PlacementPolicy or NamespacePolicy"))
+			})
+		})
 		Context("Pass create validations", func() {
 			It("Should Allow", func() {
 				testBackingstore.Spec = nbv1.BackingStoreSpec{
@@ -337,6 +372,32 @@ var _ = Describe("Admission server integration tests", func() {
 				Expect(result).To(BeFalse())
 				Ω(err).Should(HaveOccurred())
 				Expect(err.Error()).To(Equal("admission webhook \"admissionwebhook.noobaa.io\" denied the request: Scaling down the number of nodes is not currently supported"))
+			})
+		})
+		Context("Update vector bucket class", func() {
+			It("Should Deny", func() {
+				bcList := &nbv1.BucketClassList{
+					TypeMeta: metav1.TypeMeta{Kind: "BucketClassList"},
+				}
+				if !util.KubeList(bcList, &client.ListOptions{Namespace: options.Namespace}) {
+					return
+				}
+				var vectorBC *nbv1.BucketClass
+				for i := range bcList.Items {
+					if bcList.Items[i].Spec.VectorPolicy != nil {
+						vectorBC = &bcList.Items[i]
+						break
+					}
+				}
+				if vectorBC == nil {
+					Skip("no vector bucket class found in namespace")
+				}
+				vectorBC.Spec.VectorPolicy.VectorDBType = nbv1.VectorDBTypeLance
+
+				result, err = KubeUpdate(vectorBC)
+				Expect(result).To(BeFalse())
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("Updating a vector bucket class is not yet supported"))
 			})
 		})
 		Context("Updated target bucket", func() {
