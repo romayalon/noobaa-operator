@@ -445,6 +445,31 @@ func (r *BucketRequest) CreateAndUpdateBucket(
 		return fmt.Errorf("BucketClass not loaded %#v", r)
 	}
 
+	if r.BucketClass.Spec.VectorPolicy != nil {
+		vectorParams := nb.CreateVectorBucketParams{
+			Name:         r.BucketName,
+			VectorDBType: r.BucketClass.Spec.VectorPolicy.VectorDBType,
+			NamespaceResource: &nb.NamespaceResourceFullConfig{
+				Resource: r.BucketClass.Spec.VectorPolicy.Resource,
+			},
+			BucketClaim: &nb.BucketClaimInfo{
+				BucketClass: r.BucketClass.Name,
+				Namespace:   r.OBC.Namespace,
+			},
+		}
+		_, err := r.SysClient.NBClient.CreateVectorBucketAPI(vectorParams)
+		if err != nil {
+			if nbErr, ok := err.(*nb.RPCError); ok && nbErr.RPCCode == "BUCKET_ALREADY_EXISTS" {
+				msg := fmt.Sprintf("Vector bucket %q already exists", r.BucketName)
+				log.Error(msg)
+				return obErrors.NewBucketExistsError(msg)
+			}
+			return fmt.Errorf("Failed to create vector bucket %q with error: %v", r.BucketName, err)
+		}
+		log.Infof("✅ Successfully created vector bucket %q", r.BucketName)
+		return r.UpdateBucket()
+	}
+
 	log.Infof("Provisioner: replication policy %s", r.BucketClass.Spec.ReplicationPolicy)
 	var replicationParams *nb.BucketReplicationParams
 	replicationPolicy := r.BucketClass.Spec.ReplicationPolicy
@@ -728,7 +753,9 @@ func (r *BucketRequest) DeleteBucket() error {
 	var err error
 	log := r.Provisioner.Logger
 	log.Infof("deleting bucket %q", r.BucketName)
-	if r.BucketClass.Spec.NamespacePolicy != nil {
+	if r.BucketClass.Spec.VectorPolicy != nil {
+		err = r.SysClient.NBClient.DeleteVectorBucketAPI(nb.DeleteVectorBucketParams{Name: r.BucketName})
+	} else if r.BucketClass.Spec.NamespacePolicy != nil {
 		err = r.SysClient.NBClient.DeleteBucketAPI(nb.DeleteBucketParams{Name: r.BucketName})
 	} else {
 		err = r.SysClient.NBClient.DeleteBucketAndObjectsAPI(nb.DeleteBucketParams{Name: r.BucketName})
