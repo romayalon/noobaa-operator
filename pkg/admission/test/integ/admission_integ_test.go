@@ -389,9 +389,7 @@ var _ = Describe("Admission server integration tests", func() {
 						break
 					}
 				}
-				if vectorBC == nil {
-					Skip("no vector bucket class found in namespace")
-				}
+				Expect(vectorBC).NotTo(BeNil(), "need at least one vector BucketClass in namespace for this test")
 				vectorBC.Spec.VectorPolicy.VectorDBType = nbv1.VectorDBTypeLance
 
 				result, err = KubeUpdate(vectorBC)
