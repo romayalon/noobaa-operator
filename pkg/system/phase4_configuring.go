@@ -379,6 +379,9 @@ func (r *Reconciler) SetDesiredDeploymentEndpoint() error {
 			}
 
 			tlsSec := r.NooBaa.Spec.Security.APIServerSecurity
+			if tlsSec == nil {
+				tlsSec = &nbv1.TLSSecuritySpec{}
+			}
 			for j := range c.Env {
 				switch c.Env[j].Name {
 				case "MGMT_ADDR":
@@ -464,11 +467,17 @@ func (r *Reconciler) SetDesiredDeploymentEndpoint() error {
 						c.Env[j].Value = ""
 					}
 				case "TLS_MIN_VERSION":
-					c.Env[j].Value = MapTLSVersion(tlsSec.TLSMinVersion)
+					if tlsSec.TLSMinVersion != nil {
+						c.Env[j].Value = string(*tlsSec.TLSMinVersion)
+					}
 				case "TLS_CIPHERS":
-					c.Env[j].Value = strings.Join(tlsSec.TLSCiphers, ":")
+					c.Env[j].Value = mapCiphersToOpenSSL(tlsSec.TLSCiphers)
 				case "TLS_GROUPS":
-					c.Env[j].Value = JoinTLSGroups(tlsSec.TLSGroups, ":")
+					groupNames := make([]string, len(tlsSec.TLSGroups))
+					for i, g := range tlsSec.TLSGroups {
+						groupNames[i] = string(g)
+					}
+					c.Env[j].Value = strings.Join(groupNames, ":")
 				}
 			}
 
@@ -2067,28 +2076,48 @@ func derefAzureBlobString(p *string) string {
 	return *p
 }
 
-// MapTLSVersion converts a TLSProtocolVersion pointer to the Node.js minVersion string.
-func MapTLSVersion(v *nbv1.TLSProtocolVersion) string {
-	if v == nil {
-		return ""
-	}
-	switch *v {
-	case nbv1.TLSVersionTLS12:
-		return "TLSv1.2"
-	case nbv1.TLSVersionTLS13:
-		return "TLSv1.3"
-	default:
-		return ""
-	}
+
+
+// ianaToOpenSSL maps IANA/Go cipher suite names to their OpenSSL equivalents.
+// Node.js's https.createServer() expects OpenSSL-format names, while ODF
+// propagates IANA-format names in the NooBaa CR. TLS 1.3 suites are omitted
+// because they are always enabled and not configurable in either Go or Node.js.
+var ianaToOpenSSL = map[string]string{
+	"TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256":       "ECDHE-ECDSA-AES128-GCM-SHA256",
+	"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256":          "ECDHE-RSA-AES128-GCM-SHA256",
+	"TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384":        "ECDHE-ECDSA-AES256-GCM-SHA384",
+	"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384":           "ECDHE-RSA-AES256-GCM-SHA384",
+	"TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256":  "ECDHE-ECDSA-CHACHA20-POLY1305",
+	"TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256":     "ECDHE-RSA-CHACHA20-POLY1305",
+	"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256":         "ECDHE-ECDSA-AES128-SHA256",
+	"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256":            "ECDHE-RSA-AES128-SHA256",
+	"TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA":             "ECDHE-ECDSA-AES128-SHA",
+	"TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA":                "ECDHE-RSA-AES128-SHA",
+	"TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA":              "ECDHE-ECDSA-AES256-SHA",
+	"TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA":                 "ECDHE-RSA-AES256-SHA",
+	"TLS_RSA_WITH_AES_128_GCM_SHA256":                    "AES128-GCM-SHA256",
+	"TLS_RSA_WITH_AES_256_GCM_SHA384":                    "AES256-GCM-SHA384",
+	"TLS_RSA_WITH_AES_128_CBC_SHA256":                     "AES128-SHA256",
+	"TLS_RSA_WITH_AES_128_CBC_SHA":                         "AES128-SHA",
+	"TLS_RSA_WITH_AES_256_CBC_SHA":                          "AES256-SHA",
 }
 
-// JoinTLSGroups joins a slice of TLSGroup values into a separator-delimited string.
-func JoinTLSGroups(groups []nbv1.TLSGroup, sep string) string {
-	s := make([]string, len(groups))
-	for i, g := range groups {
-		s[i] = string(g)
+// mapCiphersToOpenSSL converts IANA cipher suite names to OpenSSL format for
+// Node.js endpoints. Names already in OpenSSL format (no "TLS_" prefix) are
+// passed through unchanged. Unrecognized IANA names are skipped with a warning.
+func mapCiphersToOpenSSL(names []string) string {
+	log := util.Logger()
+	var result []string
+	for _, name := range names {
+		if ossl, ok := ianaToOpenSSL[name]; ok {
+			result = append(result, ossl)
+		} else if !strings.HasPrefix(name, "TLS_") {
+			result = append(result, name)
+		} else {
+			log.Warnf("mapCiphersToOpenSSL: skipping unrecognized IANA cipher suite %q", name)
+		}
 	}
-	return strings.Join(s, sep)
+	return strings.Join(result, ":")
 }
 
 // lastAdmissionTLSSpec caches the most recently applied APIServerSecurity spec
@@ -2103,7 +2132,7 @@ func (r *Reconciler) reconcileAdmissionTLSConf() error {
 		return nil
 	}
 
-	spec := &r.NooBaa.Spec.Security.APIServerSecurity
+	spec := r.NooBaa.Spec.Security.APIServerSecurity
 	if reflect.DeepEqual(spec, lastAdmissionTLSSpec) {
 		return nil
 	}

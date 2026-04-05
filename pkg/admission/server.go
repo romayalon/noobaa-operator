@@ -110,10 +110,10 @@ func applyAPIServerTLS(tlsConfig *tls.Config, log *logrus.Entry) {
 
 	if spec.TLSMinVersion != nil {
 		switch *spec.TLSMinVersion {
-		case nbv1.TLSVersionTLS12:
+		case nbv1.VersionTLS12:
 			tlsConfig.MinVersion = tls.VersionTLS12
 			log.Info("Admission server TLS min version set to TLSv1.2")
-		case nbv1.TLSVersionTLS13:
+		case nbv1.VersionTLS13:
 			tlsConfig.MinVersion = tls.VersionTLS13
 			log.Info("Admission server TLS min version set to TLSv1.3")
 		}
@@ -129,10 +129,10 @@ func applyAPIServerTLS(tlsConfig *tls.Config, log *logrus.Entry) {
 }
 
 // mapCipherSuites converts cipher suite names to uint16 IDs for tls.Config.CipherSuites.
-// Only Go/IANA names from tls.CipherSuites are accepted — insecure suites are rejected.
-// OpenSSL-format names (e.g. ECDHE-RSA-AES128-GCM-SHA256) are not supported.
-// Note: Go's crypto/tls does not allow configuring TLS 1.3 cipher suites — they are
-// always enabled and any TLS 1.3 suite names will be logged as unsupported.
+// Only Go/IANA TLS 1.2 names from tls.CipherSuites() are accepted — insecure suites
+// are rejected and OpenSSL-format names (e.g. ECDHE-RSA-AES128-GCM-SHA256) are not
+// supported. TLS 1.3 cipher suites are always enabled in Go and cannot be configured
+// via tls.Config.CipherSuites; any TLS 1.3 names are logged at Info level and skipped.
 func mapCipherSuites(names []string, log *logrus.Entry) []uint16 {
 	lookup := make(map[string]uint16)
 	for _, cs := range tls.CipherSuites() {
@@ -144,8 +144,10 @@ func mapCipherSuites(names []string, log *logrus.Entry) []uint16 {
 		if id, ok := lookup[name]; ok {
 			ids = append(ids, id)
 			applied = append(applied, name)
+		} else if strings.HasPrefix(name, "TLS_AES_") || strings.HasPrefix(name, "TLS_CHACHA20_") {
+			log.Infof("mapCipherSuites: Skipping TLS 1.3 cipher suite %q — TLS 1.3 suites are always enabled and cannot be configured in Go", name)
 		} else {
-			log.Warnf("mapCipherSuites: Ignoring unsupported TLS cipher suite %q (only Go/IANA names are accepted; TLS 1.3 suites are managed automatically)", name)
+			log.Warnf("mapCipherSuites: Ignoring unrecognized cipher suite %q (only Go/IANA TLS 1.2 names from tls.CipherSuites() are accepted)", name)
 		}
 	}
 	if len(applied) > 0 {
@@ -154,16 +156,17 @@ func mapCipherSuites(names []string, log *logrus.Entry) []uint16 {
 	return ids
 }
 
-// tlsGroupToID maps the NooBaa TLSGroup constants (following the OpenShift API
-// TLSCurvePreferences enum from openshift/api#2583) to Go tls.CurveID values.
+// tlsGroupToID maps the NooBaa TLSGroup constants to Go tls.CurveID values.
 // TODO: When ODF is updated to include the new TLSGroups, we should switch to using the
 // ODF supported tls groups
 var tlsGroupToID = map[nbv1.TLSGroup]tls.CurveID{
-	nbv1.TLSGroupX25519:         tls.X25519,
-	nbv1.TLSGroupSecp256r1:      tls.CurveP256,
-	nbv1.TLSGroupSecp384r1:      tls.CurveP384,
-	nbv1.TLSGroupSecp521r1:      tls.CurveP521,
-	nbv1.TLSGroupX25519MLKEM768: tls.X25519MLKEM768,
+	nbv1.TLSGroupX25519:             tls.X25519,
+	nbv1.TLSGroupSecp256r1:          tls.CurveP256,
+	nbv1.TLSGroupSecp384r1:          tls.CurveP384,
+	nbv1.TLSGroupSecp521r1:          tls.CurveP521,
+	nbv1.TLSGroupX25519MLKEM768:     tls.X25519MLKEM768,
+	nbv1.TLSGroupSecP256r1MLKEM768:  4587, // tls.SecP256r1MLKEM768 in Go 1.26+
+	nbv1.TLSGroupSecP384r1MLKEM1024: 4589, // tls.SecP384r1MLKEM1024 in Go 1.26+
 }
 
 // mapGroupPreferences converts a list of NooBaa TLSGroup values to the corresponding
