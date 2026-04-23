@@ -4,7 +4,9 @@ NooBaa supports configuring TLS version, cipher suites, and key exchange group p
 
 ## NooBaa CR Interface
 
-TLS configuration is set under `spec.security.apiServerSecurity` on the NooBaa custom resource. The StorageCluster propagates the platform API Server TLS profile here and NooBaa applies it to endpoint HTTPS servers.
+TLS configuration is set under **`spec.security.tlsConfig`** on the NooBaa custom resource. The field type is OCS [`TLSConfig`](https://github.com/red-hat-storage/ocs-tls-profiles/blob/main/api/v1/tlsprofile_types.go) (`github.com/red-hat-storage/ocs-tls-profiles/api/v1`). The StorageCluster propagates the platform API Server TLS profile here and NooBaa applies it to endpoint HTTPS servers. **`version`**, **`ciphers`** (at least one), and **`groups`** (at least one) are all required together when `tlsConfig` is set—the same rules as OCS. To use defaults, omit `tlsConfig` entirely (do not set `tlsConfig: {}`).
+
+**Migration:** If you used `spec.security.apiServerSecurity`, rename the key to **`spec.security.tlsConfig`** (same nested `version` / `ciphers` / `groups`). If you briefly used top-level `spec.tlsConfig`, move that object under `spec.security.tlsConfig`. Earlier migrations: `tlsMinVersion` / `tlsCiphers` / `tlsGroups` → `version` / `ciphers` / `groups`; `VersionTLS12` / `VersionTLS13` → `TLSv1.2` / `TLSv1.3`. The CRD enforces the same enums as OCS.
 
 ```yaml
 apiVersion: noobaa.io/v1alpha1
@@ -14,12 +16,12 @@ metadata:
   namespace: openshift-storage
 spec:
   security:
-    apiServerSecurity:
-      tlsMinVersion: "VersionTLS13"
-      tlsCiphers:
+    tlsConfig:
+      version: "TLSv1.3"
+      ciphers:
         - "TLS_AES_128_GCM_SHA256"
         - "TLS_AES_256_GCM_SHA384"
-      tlsGroups:
+      groups:
         - "X25519MLKEM768"
         - "X25519"
         - "secp256r1"
@@ -29,9 +31,9 @@ spec:
 
 | Field | Type | Values | Description |
 |---|---|---|---|
-| `tlsMinVersion` | string (optional, nullable) | `VersionTLS12`, `VersionTLS13` | Minimum TLS protocol version negotiated during handshake. |
-| `tlsCiphers` | []string (optional) | OpenSSL cipher names | Cipher algorithms negotiated during the TLS handshake. |
-| `tlsGroups` | []TLSGroup (optional) | `X25519`, `secp256r1`, `secp384r1`, `secp521r1`, `X25519MLKEM768` | Key exchange group preferences WIP - waiting for final list from DF |
+| `version` | string **(required)** | `TLSv1.2`, `TLSv1.3` | TLS protocol version (OCS `TLSProtocolVersion`); propagated as `TLS_MIN_VERSION` for endpoints. |
+| `ciphers` | []string **(required, min 1)** | IANA TLS cipher suite names | Cipher algorithms (OCS `TLSCipherSuite`); the operator maps them to OpenSSL names for `TLS_CIPHERS`. |
+| `groups` | []string **(required, min 1)** | `X25519`, `secp256r1`, `secp384r1`, `secp521r1`, `X25519MLKEM768`, `SecP256r1MLKEM768`, `SecP384r1MLKEM1024` | Key exchange groups (OCS `TLSGroupName`); the operator maps them to OpenSSL curve names for `TLS_GROUPS`. |
 
 ### Defaults
 
@@ -52,23 +54,10 @@ Since Node.js v24.7.0, TLS 1.3 and X25519MLKEM768 are negotiated by default when
 kubectl patch noobaa noobaa -n openshift-storage --type merge -p '{
   "spec": {
     "security": {
-      "apiServerSecurity": {
-        "tlsMinVersion": "VersionTLS13",
-        "tlsGroups": ["X25519MLKEM768", "X25519", "secp256r1"]
-      }
-    }
-  }
-}'
-```
-
-### Set cipher suites only
-
-```bash
-kubectl patch noobaa noobaa -n openshift-storage --type merge -p '{
-  "spec": {
-    "security": {
-      "apiServerSecurity": {
-        "tlsCiphers": ["TLS_AES_256_GCM_SHA384", "TLS_AES_128_GCM_SHA256"]
+      "tlsConfig": {
+        "version": "TLSv1.3",
+        "ciphers": ["TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384"],
+        "groups": ["X25519MLKEM768", "X25519", "secp256r1"]
       }
     }
   }
@@ -79,7 +68,7 @@ kubectl patch noobaa noobaa -n openshift-storage --type merge -p '{
 
 ```bash
 kubectl patch noobaa noobaa -n openshift-storage --type json -p '[
-  {"op": "remove", "path": "/spec/security/apiServerSecurity"}
+  {"op": "remove", "path": "/spec/security/tlsConfig"}
 ]'
 ```
 
@@ -89,11 +78,11 @@ When the configuration is removed, the operator sets the corresponding environme
 
 The operator reconciler (`SetDesiredDeploymentEndpoint`) maps the CR fields to endpoint pod environment variables:
 
-| CR Field | Environment Variable | Example Value |
+| CR Field | Environment Variable | Example value |
 |---|---|---|
-| `tlsMinVersion: VersionTLS13` | `TLS_MIN_VERSION` | `TLSv1.3` |
-| `tlsCiphers: [...]` | `TLS_CIPHERS` | `TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256` |
-| `tlsGroups: [...]` | `TLS_GROUPS` | `X25519MLKEM768:X25519:secp256r1` |
+| `version: TLSv1.3` | `TLS_MIN_VERSION` | `TLSv1.3` |
+| `ciphers: [...]` | `TLS_CIPHERS` | `TLS_AES_256_GCM_SHA384:TLS_AES_128_GCM_SHA256` (OpenSSL-style) |
+| `groups: [...]` | `TLS_GROUPS` | `X25519MLKEM768:x25519:prime256v1` (OpenSSL-style curve names) |
 
 These env vars are defined in the endpoint deployment template and updated in-place on every reconciliation cycle. Updating the CR triggers a deployment rollout with the new TLS settings.
 
@@ -110,7 +99,7 @@ Expected output when TLS is configured:
 ```
 TLS_MIN_VERSION=TLSv1.3
 TLS_CIPHERS=TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384
-TLS_GROUPS=X25519MLKEM768:X25519:secp256r1
+TLS_GROUPS=X25519MLKEM768:x25519:prime256v1
 ```
 
 When TLS configuration is removed from the CR, the variables will be present but empty.
@@ -144,9 +133,9 @@ docker run --rm -it \
 ```
 
 Key things to look for in the output:
-- **Protocols**: Only TLS 1.3 should be listed as offered when `VersionTLS13` is set
-- **Forward secrecy / key exchange groups**: Should reflect `tlsGroups` (e.g., `X25519MLKEM768`)
-- **Server preference / ciphers**: Should match the configured `tlsCiphers`
+- **Protocols**: Only TLS 1.3 should be listed as offered when `TLSv1.3` is set
+- **Forward secrecy / key exchange groups**: Should reflect configured `groups` (CR uses OCS names; the endpoint sees OpenSSL names in `TLS_GROUPS`)
+- **Server preference / ciphers**: Should match the configured `ciphers`
 - **Client simulation**: Shows how various clients negotiate with the server
 
 Parse the JSON output to verify TLS 1.3 and PQC key exchange:

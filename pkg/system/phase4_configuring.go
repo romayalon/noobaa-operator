@@ -22,6 +22,7 @@ import (
 	"github.com/noobaa/noobaa-operator/v5/pkg/nb"
 	"github.com/noobaa/noobaa-operator/v5/pkg/options"
 	"github.com/noobaa/noobaa-operator/v5/pkg/util"
+	ocstlsv1 "github.com/red-hat-storage/ocs-tls-profiles/api/v1"
 	secv1 "github.com/openshift/api/security/v1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/sirupsen/logrus"
@@ -52,7 +53,7 @@ const (
 )
 
 // OnAdmissionTLSChanged is called by the reconciler when the NooBaa CR's
-// APIServerSecurity TLS settings may have changed. It is wired to
+// spec.security.tlsConfig may have changed. It is wired to
 // admission.ReloadTLSConfig at startup by the operator manager to avoid a
 // circular import between the system and admission packages.
 var OnAdmissionTLSChanged func() error
@@ -378,9 +379,10 @@ func (r *Reconciler) SetDesiredDeploymentEndpoint() error {
 				r.setDesiredCoreEnv(c)
 			}
 
-			tlsSec := r.NooBaa.Spec.Security.APIServerSecurity
-			if tlsSec == nil {
-				tlsSec = &nbv1.TLSSecuritySpec{}
+			tlsCfg := r.NooBaa.Spec.Security.TLSConfig
+			tlsOpenSSLCiphers, tlsOpenSSLGroups, err := util.OpenSSLCipherAndGroupStringsFromTLSConfig(tlsCfg)
+			if err != nil {
+				return fmt.Errorf("invalid spec.security.tlsConfig: %w", err)
 			}
 			for j := range c.Env {
 				switch c.Env[j].Name {
@@ -467,19 +469,15 @@ func (r *Reconciler) SetDesiredDeploymentEndpoint() error {
 						c.Env[j].Value = ""
 					}
 				case "TLS_MIN_VERSION":
-					if tlsSec.TLSMinVersion != nil {
-						c.Env[j].Value = string(*tlsSec.TLSMinVersion)
+					if tlsCfg != nil && tlsCfg.Version != "" {
+						c.Env[j].Value = string(tlsCfg.Version)
 					} else {
 						c.Env[j].Value = ""
 					}
 				case "TLS_CIPHERS":
-					c.Env[j].Value = util.MapCiphersToOpenSSL(tlsSec.TLSCiphers)
+					c.Env[j].Value = tlsOpenSSLCiphers
 				case "TLS_GROUPS":
-					groupNames := make([]string, len(tlsSec.TLSGroups))
-					for i, g := range tlsSec.TLSGroups {
-						groupNames[i] = string(g)
-					}
-					c.Env[j].Value = strings.Join(groupNames, ":")
+					c.Env[j].Value = tlsOpenSSLGroups
 				}
 			}
 
@@ -2078,21 +2076,19 @@ func derefAzureBlobString(p *string) string {
 	return *p
 }
 
-
-// lastAdmissionTLSSpec caches the most recently applied APIServerSecurity spec
+// lastAdmissionTLSConfig caches the most recently applied spec.security.tlsConfig
 // so that we only trigger a TLS reload when the settings actually change.
-var lastAdmissionTLSSpec *nbv1.TLSSecuritySpec
+var lastAdmissionTLSConfig *ocstlsv1.TLSConfig
 
 // reconcileAdmissionTLSConf signals the in-process admission webhook server to
-// reload its TLS configuration when the NooBaa CR's APIServerSecurity TLS
-// settings have changed.
+// reload its TLS configuration when spec.security.tlsConfig has changed.
 func (r *Reconciler) reconcileAdmissionTLSConf() error {
 	if v, ok := os.LookupEnv("ENABLE_NOOBAA_ADMISSION"); !ok || v != "true" {
 		return nil
 	}
 
-	spec := r.NooBaa.Spec.Security.APIServerSecurity
-	if reflect.DeepEqual(spec, lastAdmissionTLSSpec) {
+	spec := r.NooBaa.Spec.Security.TLSConfig
+	if reflect.DeepEqual(spec, lastAdmissionTLSConfig) {
 		return nil
 	}
 
@@ -2102,7 +2098,7 @@ func (r *Reconciler) reconcileAdmissionTLSConf() error {
 		}
 	}
 
-	lastAdmissionTLSSpec = spec.DeepCopy()
+	lastAdmissionTLSConfig = spec.DeepCopy()
 	return nil
 }
 
