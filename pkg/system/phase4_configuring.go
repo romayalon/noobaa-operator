@@ -22,9 +22,9 @@ import (
 	"github.com/noobaa/noobaa-operator/v5/pkg/nb"
 	"github.com/noobaa/noobaa-operator/v5/pkg/options"
 	"github.com/noobaa/noobaa-operator/v5/pkg/util"
-	ocstlsv1 "github.com/red-hat-storage/ocs-tls-profiles/api/v1"
 	secv1 "github.com/openshift/api/security/v1"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	ocstlsv1 "github.com/red-hat-storage/ocs-tls-profiles/api/v1"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/api/option"
 	corev1 "k8s.io/api/core/v1"
@@ -475,9 +475,13 @@ func (r *Reconciler) SetDesiredDeploymentEndpoint() error {
 						c.Env[j].Value = ""
 					}
 				case "TLS_CIPHERS":
-					c.Env[j].Value = tlsOpenSSLCiphers
+					if tlsOpenSSLCiphers != "" {
+						c.Env[j].Value = tlsOpenSSLCiphers
+					}
 				case "TLS_GROUPS":
-					c.Env[j].Value = tlsOpenSSLGroups
+					if tlsOpenSSLGroups != "" {
+						c.Env[j].Value = tlsOpenSSLGroups
+					}
 				}
 			}
 

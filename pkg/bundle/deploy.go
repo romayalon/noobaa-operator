@@ -1492,7 +1492,7 @@ spec:
       status: {}
 `
 
-const Sha256_deploy_crds_noobaa_io_noobaas_yaml = "c3bf8a8cc6d760ddefeb19f13741f55b8962994dd072c31a7862e624db6575e8"
+const Sha256_deploy_crds_noobaa_io_noobaas_yaml = "c9e85ea694e2a130379347d46f9c3db5b23a1522c284597f9997b73afdfa91d6"
 
 const File_deploy_crds_noobaa_io_noobaas_yaml = `---
 apiVersion: apiextensions.k8s.io/v1
@@ -3463,7 +3463,7 @@ spec:
                     type: object
                   tlsConfig:
                     description: |-
-                      TLSConfig optionally overrides TLS for HTTPS endpoints using the same type as
+                      TLSConfig optionally overrides TLS settings for HTTPS external servers using the same type as
                       github.com/red-hat-storage/ocs-tls-profiles/api/v1.TLSConfig. The StorageCluster
                       may propagate the platform API Server TLS profile here. Omit entirely for defaults;
                       an empty ` + "`" + `tlsConfig: {}` + "`" + ` is not valid (version, ciphers, and groups are required when set).

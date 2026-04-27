@@ -127,12 +127,12 @@ func applySecurityTLSConfig(tlsConfig *tls.Config, log *logrus.Entry) error {
 	}
 
 	if len(spec.Ciphers) > 0 || len(spec.Groups) > 0 {
-		ciphers, curves, err := util.GoCiphersAndCurvesFromTLSConfig(spec)
+		CipherSuites, CurvePreferences, err := util.GoCiphersAndCurvesFromTLSConfig(spec)
 		if err != nil {
 			return fmt.Errorf("spec.security.tlsConfig: %w", err)
 		}
-		tlsConfig.CipherSuites = ciphers
-		tlsConfig.CurvePreferences = curves
+		tlsConfig.CipherSuites = CipherSuites
+		tlsConfig.CurvePreferences = CurvePreferences
 	}
 	return nil
 }

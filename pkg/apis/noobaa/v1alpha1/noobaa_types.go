@@ -342,7 +342,7 @@ type LoadBalancerSourceSubnetSpec struct {
 // SecuritySpec is security spec to include various security items such as kms
 type SecuritySpec struct {
 	KeyManagementService KeyManagementServiceSpec `json:"kms,omitempty"`
-	// TLSConfig optionally overrides TLS for HTTPS endpoints using the same type as
+	// TLSConfig optionally overrides TLS settings for HTTPS external servers using the same type as
 	// github.com/red-hat-storage/ocs-tls-profiles/api/v1.TLSConfig. The StorageCluster
 	// may propagate the platform API Server TLS profile here. Omit entirely for defaults;
 	// an empty `tlsConfig: {}` is not valid (version, ciphers, and groups are required when set).

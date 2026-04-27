@@ -6,8 +6,6 @@ NooBaa supports configuring TLS version, cipher suites, and key exchange group p
 
 TLS configuration is set under **`spec.security.tlsConfig`** on the NooBaa custom resource. The field type is OCS [`TLSConfig`](https://github.com/red-hat-storage/ocs-tls-profiles/blob/main/api/v1/tlsprofile_types.go) (`github.com/red-hat-storage/ocs-tls-profiles/api/v1`). The StorageCluster propagates the platform API Server TLS profile here and NooBaa applies it to endpoint HTTPS servers. **`version`**, **`ciphers`** (at least one), and **`groups`** (at least one) are all required together when `tlsConfig` is set—the same rules as OCS. To use defaults, omit `tlsConfig` entirely (do not set `tlsConfig: {}`).
 
-**Migration:** If you used `spec.security.apiServerSecurity`, rename the key to **`spec.security.tlsConfig`** (same nested `version` / `ciphers` / `groups`). If you briefly used top-level `spec.tlsConfig`, move that object under `spec.security.tlsConfig`. Earlier migrations: `tlsMinVersion` / `tlsCiphers` / `tlsGroups` → `version` / `ciphers` / `groups`; `VersionTLS12` / `VersionTLS13` → `TLSv1.2` / `TLSv1.3`. The CRD enforces the same enums as OCS.
-
 ```yaml
 apiVersion: noobaa.io/v1alpha1
 kind: NooBaa
