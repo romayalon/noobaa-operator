@@ -84,6 +84,10 @@ func (bcv *ResourceValidator) ValidateCreateBC() {
 			return
 		}
 	}
+	if err := validations.ValidateArchivePolicy(bc); err != nil {
+		bcv.SetValidationResult(false, err.Error())
+		return
+	}
 }
 
 // ValidateUpdateBC runs all the validations tests for UPDATE operations
@@ -97,6 +101,14 @@ func (bcv *ResourceValidator) ValidateUpdateBC() {
 	}
 	if newBC.Spec.VectorPolicy != nil {
 		bcv.SetValidationResult(false, "Updating a vector bucket class is not yet supported")
+		return
+	}
+	if err := validations.ValidateArchivePolicy(newBC); err != nil {
+		bcv.SetValidationResult(false, err.Error())
+		return
+	}
+	if err := validations.ValidateArchivePolicyImmutable(newBC, oldBC); err != nil {
+		bcv.SetValidationResult(false, err.Error())
 		return
 	}
 }

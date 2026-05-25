@@ -385,6 +385,30 @@ func (r *Reconciler) UpdateBucketClass(bucketNames []string) error {
 		// return fmt.Errorf("Failed to update bucket class %q with error: %v - Reverting back", r.BucketClass.Name, result.ErrorMessage)
 	}
 
+	// if err := r.reconcileArchivePolicy(bucketNames); err != nil {
+	// 	return err
+	// }
+
 	log.Infof("✅ Successfully updated bucket class %q", r.BucketClass.Name)
+	return nil
+}
+
+// reconcileArchivePolicy pushes the archive_policy to all buckets in the class via update_bucket.
+func (r *Reconciler) reconcileArchivePolicy(bucketNames []string) error {
+	if r.BucketClass.Spec.ArchivePolicy == nil {
+		return nil
+	}
+	archivePolicy := &nb.ArchivePolicyInfo{
+		DeepArchiveResource: r.BucketClass.Spec.ArchivePolicy.DeepArchiveResource,
+	}
+	for _, bucketName := range bucketNames {
+		params := nb.CreateBucketParams{
+			Name:          bucketName,
+			ArchivePolicy: archivePolicy,
+		}
+		if err := r.NBClient.UpdateBucketAPI(params); err != nil {
+			return fmt.Errorf("failed to set archive_policy on bucket %q: %v", bucketName, err)
+		}
+	}
 	return nil
 }

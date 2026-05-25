@@ -65,13 +65,20 @@ type AccountInfo struct {
 	NsfsAccountConfig *nbv1.AccountNsfsConfig `json:"nsfs_account_config,omitempty"`
 }
 
+// ArchivePolicyInfo holds the archive policy passed to / returned from the core bucket API.
+// Structured as a sub-object so additional archive storage classes can be added in future.
+type ArchivePolicyInfo struct {
+	DeepArchiveResource string `json:"deep_archive_resource,omitempty"`
+}
+
 // BucketInfo is a struct of bucket info returned by the API
 type BucketInfo struct {
-	Name         string `json:"name"`
-	BucketType   string `json:"bucket_type"`
-	Mode         string `json:"mode"`
-	Undeletable  string `json:"undeletable"`
-	ForceMd5Etag *bool  `json:"force_md5_etag,omitempty"`
+	Name          string             `json:"name"`
+	BucketType    string             `json:"bucket_type"`
+	Mode          string             `json:"mode"`
+	Undeletable   string             `json:"undeletable"`
+	ForceMd5Etag  *bool              `json:"force_md5_etag,omitempty"`
+	ArchivePolicy *ArchivePolicyInfo `json:"archive_policy,omitempty"`
 
 	BucketClaim  *BucketClaimInfo   `json:"bucket_claim,omitempty"`
 	Tiering      *TieringPolicyInfo `json:"tiering,omitempty"`
@@ -338,14 +345,15 @@ type CreateSystemReply struct {
 	OperatorToken string `json:"operator_token"`
 }
 
-// CreateBucketParams is the params of bucket_api.create_bucket()
+// CreateBucketParams is the params of bucket_api.create_bucket() and bucket_api.update_bucket()
 type CreateBucketParams struct {
-	Name         string               `json:"name"`
-	Tiering      string               `json:"tiering,omitempty"`
-	ForceMd5Etag *bool                `json:"force_md5_etag,omitempty"`
-	BucketClaim  *BucketClaimInfo     `json:"bucket_claim,omitempty"`
-	Namespace    *NamespaceBucketInfo `json:"namespace,omitempty"`
-	Quota        *QuotaConfig         `json:"quota,omitempty"`
+	Name          string               `json:"name"`
+	Tiering       string               `json:"tiering,omitempty"`
+	ForceMd5Etag  *bool                `json:"force_md5_etag,omitempty"`
+	BucketClaim   *BucketClaimInfo     `json:"bucket_claim,omitempty"`
+	Namespace     *NamespaceBucketInfo `json:"namespace,omitempty"`
+	Quota         *QuotaConfig         `json:"quota,omitempty"`
+	ArchivePolicy *ArchivePolicyInfo   `json:"archive_policy,omitempty"`
 }
 
 // QuotaConfig quota configuration
