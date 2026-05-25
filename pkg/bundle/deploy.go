@@ -963,7 +963,7 @@ spec:
       status: {}
 `
 
-const Sha256_deploy_crds_noobaa_io_namespacestores_yaml = "771b9b6a9da4a926d8f22e3d129c339eea0edff563f4d7494a278179aae86fca"
+const Sha256_deploy_crds_noobaa_io_namespacestores_yaml = "1b4364665355cf53025eec1959951d77753c47ebe73dca2f2f0f8b867d2cf50b"
 
 const File_deploy_crds_noobaa_io_namespacestores_yaml = `---
 apiVersion: apiextensions.k8s.io/v1
@@ -1099,6 +1099,37 @@ spec:
                     type: string
                 required:
                 - targetBlobContainer
+                type: object
+              deepArchive:
+                description: DeepArchive specifies a namespace store of type deep-archive
+                properties:
+                  endpoint:
+                    description: 'Endpoint is the deep archive S3-compatible endpoint:
+                      http(s)://host:port'
+                    type: string
+                  secret:
+                    description: |-
+                      Secret refers to a secret that provides the credentials.
+                      The secret should define AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+                    properties:
+                      name:
+                        description: name is unique within a namespace to reference
+                          a secret resource.
+                        type: string
+                      namespace:
+                        description: namespace defines the space within which the
+                          secret name must be unique.
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  targetBucket:
+                    description: TargetBucket is the name of the target bucket in
+                      the deep archive endpoint
+                    type: string
+                required:
+                - endpoint
+                - secret
+                - targetBucket
                 type: object
               googleCloudStorage:
                 description: GoogleCloudStorage specifies a namespace store of type
@@ -7532,4 +7563,3 @@ spec:
               containerPort: 7761
 
 `
-

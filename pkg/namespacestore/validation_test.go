@@ -155,6 +155,48 @@ func TestNamespaceStoreIBMCos(t *testing.T) {
 
 }
 
+func TestNamespaceStoreDeepArchive(t *testing.T) {
+
+	// Valid deep-archive namespacestore
+	defaultNs := getDefaultDeepArchiveNsStore()
+	err := validations.ValidateNamespaceStore(&defaultNs)
+	AssertNotError(t, err, "Valid deep-archive namespacestore validation failed")
+
+	// DeepArchive spec is nil (wrong type spec)
+	defaultNs = nbv1.NamespaceStore{
+		Spec: nbv1.NamespaceStoreSpec{
+			Type: nbv1.NSStoreTypeDeepArchive,
+		},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-deep-archive"},
+	}
+	err = validations.ValidateNamespaceStore(&defaultNs)
+	AssertError(t, err, "Nil DeepArchive spec should be denied")
+
+	// Empty secret name
+	defaultNs = getDefaultDeepArchiveNsStore()
+	defaultNs.Spec.DeepArchive.Secret.Name = ""
+	err = validations.ValidateNamespaceStore(&defaultNs)
+	AssertError(t, err, "Empty secret name for deep-archive namespacestore should be denied")
+
+	// Empty target bucket
+	defaultNs = getDefaultDeepArchiveNsStore()
+	defaultNs.Spec.DeepArchive.TargetBucket = ""
+	err = validations.ValidateNamespaceStore(&defaultNs)
+	AssertError(t, err, "Empty target bucket for deep-archive namespacestore should be denied")
+
+	// Empty endpoint must be rejected for deep-archive (no defaulting)
+	defaultNs = getDefaultDeepArchiveNsStore()
+	defaultNs.Spec.DeepArchive.Endpoint = ""
+	err = validations.ValidateNamespaceStore(&defaultNs)
+	AssertError(t, err, "Empty endpoint for deep-archive namespacestore should be denied")
+
+	// Invalid endpoint (no scheme)
+	defaultNs = getDefaultDeepArchiveNsStore()
+	defaultNs.Spec.DeepArchive.Endpoint = "hostname:port"
+	err = validations.ValidateNamespaceStore(&defaultNs)
+	AssertError(t, err, "Invalid endpoint %q should be denied", defaultNs.Spec.DeepArchive.Endpoint)
+}
+
 func AssertNotError(t *testing.T, err error, format string, a ...interface{}) {
 	if err != nil {
 		msg := fmt.Sprintf(format, a...)
@@ -227,6 +269,23 @@ func getDefaultNSFSNsStore() nbv1.NamespaceStore {
 			},
 		},
 		ObjectMeta: metav1.ObjectMeta{Name: "test1"},
+	}
+}
+
+func getDefaultDeepArchiveNsStore() nbv1.NamespaceStore {
+	return nbv1.NamespaceStore{
+		Spec: nbv1.NamespaceStoreSpec{
+			Type: nbv1.NSStoreTypeDeepArchive,
+			DeepArchive: &nbv1.DeepArchiveSpec{
+				Endpoint:     defaultEndPointURI,
+				TargetBucket: "archive-bucket",
+				Secret: corev1.SecretReference{
+					Name:      "archive-secret",
+					Namespace: "namespace",
+				},
+			},
+		},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-deep-archive", Namespace: "namespace"},
 	}
 }
 

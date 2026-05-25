@@ -10,6 +10,7 @@ Supported NamespaceStore types:
 - ibm-cos
 - google-cloud-storage
 - azure-blob
+- deep-archive
 
 # Definitions
 - CRD: [noobaa.io_NamespaceStores_crd.yaml](../deploy/crds/noobaa.io_namespacestores_crd.yaml)
@@ -199,6 +200,37 @@ spec:
   type: azure-blob
 ```
 
+## Deep Archive
+Uses an S3-compatible API to write objects directly to a tape-based cold storage endpoint (e.g. IBM Deep Archive).
+This store type is intended for long-term archival and compliance use cases where data is written once and read infrequently.
+```shell
+noobaa namespacestore create deep-archive <NAMESPACESTORE NAME> --endpoint <> --target-bucket <> --access-key <> --secret-key <>
+```
+
+Using an existing secret:
+```shell
+noobaa namespacestore create deep-archive <NAMESPACESTORE NAME> --endpoint <> 
+  --target-bucket <> --secret-name <>
+```
+
+```yaml
+apiVersion: noobaa.io/v1alpha1
+kind: NamespaceStore
+metadata:
+  finalizers:
+  - noobaa.io/finalizer
+  name: <>
+  namespace: <>
+spec:
+  deepArchive:
+    endpoint: <>
+    secret:
+      name: <>
+      namespace: <>
+    targetBucket: <>
+  type: deep-archive
+```
+
 ## Examples
 ### AWS S3
 Note that the keys below are example keys from the AWS documentation, and will not work.
@@ -220,6 +252,31 @@ spec:
       namespace: secret-namespace
     targetBucket: personal-bucket
   type: aws-s3
+```
+
+### Deep Archive
+```shell
+noobaa namespacestore create deep-archive my-archive-store \
+  --endpoint https://s3.us-south.cloud-object-storage.appdomain.cloud \
+  --target-bucket my-archive-bucket \
+  --secret-name my-archive-secret
+```
+```yaml
+apiVersion: noobaa.io/v1alpha1
+kind: NamespaceStore
+metadata:
+  finalizers:
+  - noobaa.io/finalizer
+  name: my-archive-store
+  namespace: noobaa
+spec:
+  deepArchive:
+    endpoint: https://s3.us-south.cloud-object-storage.appdomain.cloud
+    secret:
+      name: my-archive-secret
+      namespace: noobaa
+    targetBucket: my-archive-bucket
+  type: deep-archive
 ```
 
 ## Modifying a Namespace Store's Credentials

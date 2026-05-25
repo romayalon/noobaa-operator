@@ -93,6 +93,12 @@ func ValidateNSInValidSpec(nsStore nbv1.NamespaceStore) error {
 		if nsStore.Spec.GoogleCloudStorage == nil {
 			return util.ValidationError{Msg: "GoogleCloudStorage spec must be provided for google-cloud-storage type Namespacestore"}
 		}
+
+	case nbv1.NSStoreTypeDeepArchive:
+		if nsStore.Spec.DeepArchive == nil {
+			return util.ValidationError{Msg: "DeepArchive spec must be provided for deep-archive type Namespacestore"}
+		}
+
 	default:
 		return util.ValidationError{
 			Msg: "Invalid Namespacestore type, please provide a valid Namespacestore type",
@@ -320,6 +326,12 @@ func ValidateNSEmptySecretName(ns nbv1.NamespaceStore) error {
 				Msg: "Failed creating the namespacestore, please provide secret name",
 			}
 		}
+	case nbv1.NSStoreTypeDeepArchive:
+		if len(ns.Spec.DeepArchive.Secret.Name) == 0 {
+			return util.ValidationError{
+				Msg: "Failed creating the namespacestore, please provide secret name",
+			}
+		}
 	case nbv1.NSStoreTypeNSFS:
 		break
 	default:
@@ -363,6 +375,12 @@ func ValidateNSEmptyTargetBucket(ns nbv1.NamespaceStore) error {
 				Msg: "Failed creating the namespacestore, please provide target bucket",
 			}
 		}
+	case nbv1.NSStoreTypeDeepArchive:
+		if len(ns.Spec.DeepArchive.TargetBucket) == 0 {
+			return util.ValidationError{
+				Msg: "Failed creating the namespacestore, please provide target bucket",
+			}
+		}
 	case nbv1.NSStoreTypeNSFS:
 		break
 	default:
@@ -402,6 +420,12 @@ func ValidateTargetNSBucketChange(ns nbv1.NamespaceStore, oldNs nbv1.NamespaceSt
 		}
 	case nbv1.NSStoreTypeGoogleCloudStorage:
 		if oldNs.Spec.GoogleCloudStorage.TargetBucket != ns.Spec.GoogleCloudStorage.TargetBucket {
+			return util.ValidationError{
+				Msg: "Changing a NamespaceStore target bucket is unsupported",
+			}
+		}
+	case nbv1.NSStoreTypeDeepArchive:
+		if oldNs.Spec.DeepArchive.TargetBucket != ns.Spec.DeepArchive.TargetBucket {
 			return util.ValidationError{
 				Msg: "Changing a NamespaceStore target bucket is unsupported",
 			}

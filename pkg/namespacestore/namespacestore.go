@@ -64,6 +64,7 @@ func CmdCreate() *cobra.Command {
 		CmdCreateAzureBlob(),
 		CmdCreateAzureSTSBlob(),
 		CmdCreateNSFS(),
+		CmdCreateDeepArchive(),
 	)
 	return cmd
 }
@@ -215,6 +216,40 @@ func CmdCreateIBMCos() *cobra.Command {
 	cmd.Flags().String(
 		"endpoint", "",
 		"The target IBM Cos endpoint",
+	)
+	cmd.Flags().String(
+		"access-mode", "read-write",
+		`The resource access privileges read-write|read-only`,
+	)
+	return cmd
+}
+
+// CmdCreateDeepArchive returns a CLI command
+func CmdCreateDeepArchive() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "deep-archive <namespace-store-name>",
+		Short: "Create deep-archive namespace store",
+		Run:   RunCreateDeepArchive,
+	}
+	cmd.Flags().String(
+		"target-bucket", "",
+		"The target bucket name on the deep archive endpoint",
+	)
+	cmd.Flags().String(
+		"access-key", "",
+		`Access key for authentication - the best practice is to **omit this flag**, in that case the CLI will prompt and read it securely from the terminal to avoid leaking secrets in the shell history`,
+	)
+	cmd.Flags().String(
+		"secret-key", "",
+		`Secret key for authentication - the best practice is to **omit this flag**, in that case the CLI will prompt and read it securely from the terminal to avoid leaking secrets in the shell history`,
+	)
+	cmd.Flags().String(
+		"secret-name", "",
+		`The name of a secret for authentication - should have AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY properties`,
+	)
+	cmd.Flags().String(
+		"endpoint", "",
+		"The deep archive S3-compatible endpoint URL",
 	)
 	cmd.Flags().String(
 		"access-mode", "read-write",
@@ -433,6 +468,16 @@ func createCommon(cmd *cobra.Command, args []string, storeType nbv1.NSType, popu
 		log.Fatalf(`❌ %s %s`, validationErr, cmd.UsageString())
 	}
 
+	if storeType == nbv1.NSStoreTypeDeepArchive {
+		nsList := &nbv1.NamespaceStoreList{}
+		if !util.KubeList(nsList, client.InNamespace(options.Namespace)) {
+			log.Fatalf(`❌ failed to list NamespaceStores for duplicate check; please retry`)
+		}
+		if err := validations.ValidateDuplicateDeepArchiveNS(namespaceStore, nsList.Items); err != nil {
+			log.Fatalf(`❌ %s`, err)
+		}
+	}
+
 	// Create namespace store CR
 	util.Panic(controllerutil.SetControllerReference(sys, namespaceStore, scheme.Scheme))
 	if !util.KubeCreateFailExisting(namespaceStore) {
@@ -471,7 +516,8 @@ func RunCreate(cmd *cobra.Command, args []string) {
 		log.Fatalf(`❌ Missing expected arguments: <namespace-store-type> %s`, cmd.UsageString())
 	}
 	if args[0] != "aws-s3" && args[0] != "azure-blob" && args[0] != "ibm-cos" &&
-		args[0] != "nsfs" && args[0] != "s3-compatible" && args[0] != "azure-sts-blob" {
+		args[0] != "nsfs" && args[0] != "s3-compatible" && args[0] != "azure-sts-blob" &&
+		args[0] != "deep-archive" {
 		log.Fatalf(`❌ Unsupported <namespace-store-type> -> %s %s`, args[0], cmd.UsageString())
 	}
 }
@@ -664,6 +710,36 @@ func RunCreateIBMCos(cmd *cobra.Command, args []string) {
 			TargetBucket:     targetBucket,
 			Endpoint:         endpoint,
 			SignatureVersion: nbv1.S3SignatureVersion("v2"),
+			Secret: corev1.SecretReference{
+				Name:      secret.Name,
+				Namespace: secret.Namespace,
+			},
+		}
+	})
+}
+
+// RunCreateDeepArchive runs a CLI command
+func RunCreateDeepArchive(cmd *cobra.Command, args []string) {
+	createCommon(cmd, args, nbv1.NSStoreTypeDeepArchive, func(namespaceStore *nbv1.NamespaceStore, secret *corev1.Secret) {
+		endpoint := util.GetFlagStringOrPrompt(cmd, "endpoint")
+		targetBucket := util.GetFlagStringOrPrompt(cmd, "target-bucket")
+		secretName, _ := cmd.Flags().GetString("secret-name")
+		mandatoryProperties := []string{"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"}
+
+		if secretName == "" {
+			accessKey := util.GetFlagStringOrPromptPassword(cmd, "access-key")
+			secretKey := util.GetFlagStringOrPromptPassword(cmd, "secret-key")
+			secret.StringData["AWS_ACCESS_KEY_ID"] = accessKey
+			secret.StringData["AWS_SECRET_ACCESS_KEY"] = secretKey
+		} else {
+			util.VerifyCredsInSecret(secretName, options.Namespace, mandatoryProperties)
+			secret.Name = secretName
+			secret.Namespace = options.Namespace
+		}
+
+		namespaceStore.Spec.DeepArchive = &nbv1.DeepArchiveSpec{
+			TargetBucket: targetBucket,
+			Endpoint:     endpoint,
 			Secret: corev1.SecretReference{
 				Name:      secret.Name,
 				Namespace: secret.Namespace,

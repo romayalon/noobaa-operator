@@ -1195,6 +1195,150 @@ var _ = Describe("NooBaaAccount admission unit tests", func() {
 	})
 })
 
+var _ = Describe("NamespaceStore deep-archive admission unit tests", func() {
+
+	var (
+		ns  *nbv1.NamespaceStore
+		err error
+	)
+
+	newDeepArchiveNS := func(name, endpoint, bucket string) *nbv1.NamespaceStore {
+		o := util.KubeObject(bundle.File_deploy_crds_noobaa_io_v1alpha1_namespacestore_cr_yaml).(*nbv1.NamespaceStore)
+		o.Name = name
+		o.Namespace = "test"
+		o.Spec = nbv1.NamespaceStoreSpec{
+			Type: nbv1.NSStoreTypeDeepArchive,
+			DeepArchive: &nbv1.DeepArchiveSpec{
+				Endpoint:     endpoint,
+				TargetBucket: bucket,
+				Secret:       corev1.SecretReference{Name: "secret", Namespace: "test"},
+			},
+		}
+		return o
+	}
+
+	BeforeEach(func() {
+		ns = newDeepArchiveNS("da-store", "https://archive.example.com:9000", "archive-bucket")
+	})
+
+	Describe("Validate create operations", func() {
+
+		Context("Spec consistency", func() {
+			It("Should Deny when DeepArchive spec is missing", func() {
+				ns.Spec = nbv1.NamespaceStoreSpec{Type: nbv1.NSStoreTypeDeepArchive}
+				err = validations.ValidateNSInValidSpec(*ns)
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(Equal("DeepArchive spec must be provided for deep-archive type Namespacestore"))
+			})
+			It("Should Allow when spec is complete", func() {
+				err = validations.ValidateNSInValidSpec(*ns)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+		})
+
+		Context("Empty secret name", func() {
+			It("Should Deny", func() {
+				ns.Spec.DeepArchive.Secret.Name = ""
+				err = validations.ValidateNSEmptySecretName(*ns)
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(Equal("Failed creating the namespacestore, please provide secret name"))
+			})
+			It("Should Allow when secret name is set", func() {
+				err = validations.ValidateNSEmptySecretName(*ns)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+		})
+
+		Context("Empty target bucket", func() {
+			It("Should Deny", func() {
+				ns.Spec.DeepArchive.TargetBucket = ""
+				err = validations.ValidateNSEmptyTargetBucket(*ns)
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(Equal("Failed creating the namespacestore, please provide target bucket"))
+			})
+			It("Should Allow when target bucket is set", func() {
+				err = validations.ValidateNSEmptyTargetBucket(*ns)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+		})
+
+		Context("Endpoint validation", func() {
+			It("Should Deny invalid endpoint", func() {
+				ns.Spec.DeepArchive.Endpoint = "hostname:port"
+				err = validations.ValidateNsStoreDeepArchive(ns)
+				Ω(err).Should(HaveOccurred())
+			})
+			It("Should Allow valid https endpoint", func() {
+				err = validations.ValidateNsStoreDeepArchive(ns)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+			It("Should Deny empty endpoint", func() {
+				ns.Spec.DeepArchive.Endpoint = ""
+				err = validations.ValidateNsStoreDeepArchive(ns)
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(Equal("Failed creating the namespacestore, please provide endpoint"))
+			})
+		})
+
+		Context("Duplicate endpoint+targetBucket detection", func() {
+			It("Should Deny when an existing store uses the same endpoint+bucket", func() {
+				existing := *newDeepArchiveNS("existing-store", "https://archive.example.com:9000", "archive-bucket")
+				err = validations.ValidateDuplicateDeepArchiveNS(ns, []nbv1.NamespaceStore{existing})
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("existing-store"))
+				Expect(err.Error()).To(ContainSubstring("archive-bucket"))
+			})
+			It("Should Allow when bucket differs", func() {
+				existing := *newDeepArchiveNS("existing-store", "https://archive.example.com:9000", "other-bucket")
+				err = validations.ValidateDuplicateDeepArchiveNS(ns, []nbv1.NamespaceStore{existing})
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+			It("Should Allow when endpoint differs", func() {
+				existing := *newDeepArchiveNS("existing-store", "https://other.example.com:9000", "archive-bucket")
+				err = validations.ValidateDuplicateDeepArchiveNS(ns, []nbv1.NamespaceStore{existing})
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+			It("Should Allow a store to match itself (idempotent / update path)", func() {
+				existing := *newDeepArchiveNS(ns.Name, "https://archive.example.com:9000", "archive-bucket")
+				err = validations.ValidateDuplicateDeepArchiveNS(ns, []nbv1.NamespaceStore{existing})
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+			It("Should ignore non-deep-archive stores even if endpoint+bucket match", func() {
+				existing := nbv1.NamespaceStore{}
+				existing.Name = "s3-store"
+				existing.Namespace = "test"
+				existing.Spec = nbv1.NamespaceStoreSpec{
+					Type: nbv1.NSStoreTypeS3Compatible,
+					S3Compatible: &nbv1.S3CompatibleSpec{
+						Endpoint:     "https://archive.example.com:9000",
+						TargetBucket: "archive-bucket",
+						Secret:       corev1.SecretReference{Name: "secret", Namespace: "test"},
+					},
+				}
+				err = validations.ValidateDuplicateDeepArchiveNS(ns, []nbv1.NamespaceStore{existing})
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+		})
+	})
+
+	Describe("Validate update operations", func() {
+		Context("Target bucket immutability", func() {
+			It("Should Deny when target bucket changes", func() {
+				oldNS := *newDeepArchiveNS(ns.Name, ns.Spec.DeepArchive.Endpoint, "original-bucket")
+				ns.Spec.DeepArchive.TargetBucket = "changed-bucket"
+				err = validations.ValidateTargetNSBucketChange(*ns, oldNS)
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(Equal("Changing a NamespaceStore target bucket is unsupported"))
+			})
+			It("Should Allow when target bucket is unchanged", func() {
+				oldNS := *newDeepArchiveNS(ns.Name, ns.Spec.DeepArchive.Endpoint, ns.Spec.DeepArchive.TargetBucket)
+				err = validations.ValidateTargetNSBucketChange(*ns, oldNS)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+		})
+	})
+})
+
 var _ = Describe("Noobaa admission unit tests", func() {
 
 	var (

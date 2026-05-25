@@ -401,6 +401,117 @@ var _ = Describe("Admission server integration tests", func() {
 		})
 	})
 
+	Describe("deep-archive NamespaceStore", func() {
+		const (
+			daEndpoint = "https://deep-archive.example.com:9000"
+			daBucket   = "archive-bucket"
+			daSecret   = "archive-secret"
+		)
+
+		newDeepArchiveNS := func(name string) *nbv1.NamespaceStore {
+			o := util.KubeObject(bundle.File_deploy_crds_noobaa_io_v1alpha1_namespacestore_cr_yaml).(*nbv1.NamespaceStore)
+			o.Name = name
+			o.Namespace = namespace
+			o.Spec = nbv1.NamespaceStoreSpec{
+				Type: nbv1.NSStoreTypeDeepArchive,
+				DeepArchive: &nbv1.DeepArchiveSpec{
+					Endpoint:     daEndpoint,
+					TargetBucket: daBucket,
+					Secret:       corev1.SecretReference{Name: daSecret, Namespace: namespace},
+				},
+			}
+			return o
+		}
+
+		AfterEach(func() {
+			// Best-effort cleanup so a failed test does not poison subsequent ones.
+			for _, name := range []string{"da-store-1", "da-store-2"} {
+				obj := &nbv1.NamespaceStore{}
+				obj.Name = name
+				obj.Namespace = namespace
+				KubeDelete(obj) //nolint:errcheck
+			}
+		})
+
+		Context("Create: valid deep-archive store", func() {
+			It("Should Allow", func() {
+				store := newDeepArchiveNS("da-store-1")
+				result, err = KubeCreate(store)
+				Expect(result).To(BeTrue())
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+		})
+
+		Context("Create: empty secret name", func() {
+			It("Should Deny", func() {
+				store := newDeepArchiveNS("da-store-1")
+				store.Spec.DeepArchive.Secret.Name = ""
+				result, err = KubeCreate(store)
+				Expect(result).To(BeFalse())
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(Equal("admission webhook \"admissionwebhook.noobaa.io\" denied the request: Failed creating the namespacestore, please provide secret name"))
+			})
+		})
+
+		Context("Create: empty target bucket", func() {
+			It("Should Deny", func() {
+				store := newDeepArchiveNS("da-store-1")
+				store.Spec.DeepArchive.TargetBucket = ""
+				result, err = KubeCreate(store)
+				Expect(result).To(BeFalse())
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(Equal("admission webhook \"admissionwebhook.noobaa.io\" denied the request: Failed creating the namespacestore, please provide target bucket"))
+			})
+		})
+
+		Context("Create: duplicate endpoint+targetBucket", func() {
+			It("Should Deny the second store", func() {
+				first := newDeepArchiveNS("da-store-1")
+				result, err = KubeCreate(first)
+				Expect(result).To(BeTrue(), "first store should be created successfully")
+				Ω(err).ShouldNot(HaveOccurred())
+
+				second := newDeepArchiveNS("da-store-2")
+				result, err = KubeCreate(second)
+				Expect(result).To(BeFalse())
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("admission webhook \"admissionwebhook.noobaa.io\" denied the request:"))
+				Expect(err.Error()).To(ContainSubstring("da-store-1"))
+				Expect(err.Error()).To(ContainSubstring(daBucket))
+			})
+		})
+
+		Context("Create: same endpoint but different bucket", func() {
+			It("Should Allow", func() {
+				first := newDeepArchiveNS("da-store-1")
+				result, err = KubeCreate(first)
+				Expect(result).To(BeTrue())
+				Ω(err).ShouldNot(HaveOccurred())
+
+				second := newDeepArchiveNS("da-store-2")
+				second.Spec.DeepArchive.TargetBucket = "other-archive-bucket"
+				result, err = KubeCreate(second)
+				Expect(result).To(BeTrue())
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+		})
+
+		Context("Update: target bucket change", func() {
+			It("Should Deny", func() {
+				store := newDeepArchiveNS("da-store-1")
+				result, err = KubeCreate(store)
+				Expect(result).To(BeTrue())
+				Ω(err).ShouldNot(HaveOccurred())
+
+				store.Spec.DeepArchive.TargetBucket = "changed-bucket"
+				result, err = KubeUpdate(store)
+				Expect(result).To(BeFalse())
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(Equal("admission webhook \"admissionwebhook.noobaa.io\" denied the request: Changing a NamespaceStore target bucket is unsupported"))
+			})
+		})
+	})
+
 	Describe("Delete operations", func() {
 		It("Should Deny", func() {
 			defaultBs := &nbv1.BackingStore{

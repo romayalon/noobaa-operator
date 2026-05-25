@@ -92,6 +92,10 @@ type NamespaceStoreSpec struct {
 	// NSFS specifies a namespace store of type nsfs
 	// +optional
 	NSFS *NSFSSpec `json:"nsfs,omitempty"`
+
+	// DeepArchive specifies a namespace store of type deep-archive
+	// +optional
+	DeepArchive *DeepArchiveSpec `json:"deepArchive,omitempty"`
 }
 
 // IsArchiveNamespaceStore returns true when the store is configured for archive (cold storage) use.
@@ -179,6 +183,9 @@ const (
 
 	// NSStoreTypeNSFS is used to connect to a file system
 	NSStoreTypeNSFS NSType = "nsfs"
+
+	// NSStoreTypeDeepArchive is used to connect to a Deep Archive S3-compatible cold storage endpoint
+	NSStoreTypeDeepArchive NSType = "deep-archive"
 )
 
 // AccessModeType is the type of all the optional access modes
@@ -190,6 +197,21 @@ const (
 	// AccessModeReadOnly is a read only access mode
 	AccessModeReadOnly AccessModeType = "ReadOnly"
 )
+
+// DeepArchiveSpec specifies a namespace store of type deep-archive.
+// Deep Archive is an S3-compatible cold storage endpoint.
+type DeepArchiveSpec struct {
+
+	// TargetBucket is the name of the target bucket in the deep archive endpoint
+	TargetBucket string `json:"targetBucket"`
+
+	// Endpoint is the deep archive S3-compatible endpoint: http(s)://host:port
+	Endpoint string `json:"endpoint"`
+
+	// Secret refers to a secret that provides the credentials.
+	// The secret should define AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+	Secret corev1.SecretReference `json:"secret"`
+}
 
 // NSFSSpec specifies a namespace store of type nsfs
 type NSFSSpec struct {

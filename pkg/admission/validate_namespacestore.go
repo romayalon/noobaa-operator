@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // NewNamespaceStoreValidator initializes a BackingStoreValidator to be used for loading and validating a namespacestore
@@ -70,6 +71,18 @@ func (nsv *ResourceValidator) ValidateCreateNS() {
 		nsv.SetValidationResult(false, err.Error())
 		return
 	}
+
+	if ns.Spec.Type == nbv1.NSStoreTypeDeepArchive {
+		nsList := &nbv1.NamespaceStoreList{}
+		if !util.KubeList(nsList, client.InNamespace(ns.Namespace)) {
+			nsv.SetValidationResult(false, "failed to list NamespaceStores for duplicate check; please retry")
+			return
+		}
+		if err := validations.ValidateDuplicateDeepArchiveNS(ns, nsList.Items); err != nil && util.IsValidationError(err) {
+			nsv.SetValidationResult(false, err.Error())
+			return
+		}
+	}
 }
 
 // ValidateUpdateNS runs all the validations tests for UPDATE operations
@@ -87,7 +100,8 @@ func (nsv *ResourceValidator) ValidateUpdateNS() {
 	}
 
 	switch ns.Spec.Type {
-	case nbv1.NSStoreTypeAWSS3, nbv1.NSStoreTypeS3Compatible, nbv1.NSStoreTypeIBMCos, nbv1.NSStoreTypeAzureBlob, nbv1.NSStoreTypeGoogleCloudStorage:
+	case nbv1.NSStoreTypeAWSS3, nbv1.NSStoreTypeS3Compatible, nbv1.NSStoreTypeIBMCos,
+		nbv1.NSStoreTypeAzureBlob, nbv1.NSStoreTypeGoogleCloudStorage, nbv1.NSStoreTypeDeepArchive:
 		if err := validations.ValidateTargetNSBucketChange(*ns, *oldNS); err != nil && util.IsValidationError(err) {
 			nsv.SetValidationResult(false, err.Error())
 			return

@@ -259,6 +259,15 @@ test-admission: vendor
 	@echo "✅ test-admission"
 .PHONY: test-admission
 
+# test-integration runs all integration test suites that share the standard
+# NooBaa cluster environment (cluster + admission webhook).
+# Suites are executed sequentially; a failure in one stops the rest.
+# Add new suites here as they are introduced.
+test-integration: vendor
+	ginkgo -v pkg/namespacestore/test/integ/deep-archive
+	@echo "✅ test-integration"
+.PHONY: test-integration
+
 test-cosi: vendor
 	ginkgo -v pkg/cosi
 	@echo "✅ test-cosi"

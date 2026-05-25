@@ -150,6 +150,7 @@ var (
 		"azure-blob":           {"AccountName", "AccountKey"},                          // backingstores and namespacestores
 		"pv-pool":              {},                                                     // backingstores
 		"nsfs":                 {},                                                     // namespacestores
+		"deep-archive":         {"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"},         // namespacestores
 	}
 )
 
@@ -2007,6 +2008,8 @@ func GetEndpointByNamespaceStoreType(ns *nbv1.NamespaceStore) (string, error) {
 		endpoint = "https://blob.core.windows.net"
 	case nbv1.NSStoreTypeGoogleCloudStorage:
 		endpoint = "https://www.googleapis.com"
+	case nbv1.NSStoreTypeDeepArchive:
+		endpoint = ns.Spec.DeepArchive.Endpoint
 	case nbv1.NSStoreTypeNSFS:
 		return endpoint, fmt.Errorf("%q type does not have endpoint parameter %q", ns.Spec.Type, ns.Name)
 	default:
@@ -2109,6 +2112,8 @@ func GetNamespaceStoreSecretByType(ns *nbv1.NamespaceStore) (*corev1.SecretRefer
 		secretRef = ns.Spec.AzureBlob.Secret
 	case nbv1.NSStoreTypeGoogleCloudStorage:
 		secretRef = ns.Spec.GoogleCloudStorage.Secret
+	case nbv1.NSStoreTypeDeepArchive:
+		secretRef = ns.Spec.DeepArchive.Secret
 	case nbv1.NSStoreTypeNSFS:
 		return nil, nil
 	default:
@@ -2148,6 +2153,9 @@ func SetNamespaceStoreSecretRef(ns *nbv1.NamespaceStore, ref *corev1.SecretRefer
 	case nbv1.NSStoreTypeGoogleCloudStorage:
 		ns.Spec.GoogleCloudStorage.Secret = *ref
 		return nil
+	case nbv1.NSStoreTypeDeepArchive:
+		ns.Spec.DeepArchive.Secret = *ref
+		return nil
 	case nbv1.NSStoreTypeNSFS:
 		return nil
 	default:
@@ -2168,6 +2176,8 @@ func GetNamespaceStoreTargetBucket(ns *nbv1.NamespaceStore) (string, error) {
 		return ns.Spec.AzureBlob.TargetBlobContainer, nil
 	case nbv1.NSStoreTypeGoogleCloudStorage:
 		return ns.Spec.GoogleCloudStorage.TargetBucket, nil
+	case nbv1.NSStoreTypeDeepArchive:
+		return ns.Spec.DeepArchive.TargetBucket, nil
 	case nbv1.NSStoreTypeNSFS:
 		return "", nil
 	default:

@@ -133,6 +133,37 @@ spec:
                 required:
                 - targetBlobContainer
                 type: object
+              deepArchive:
+                description: DeepArchive specifies a namespace store of type deep-archive
+                properties:
+                  endpoint:
+                    description: 'Endpoint is the deep archive S3-compatible endpoint:
+                      http(s)://host:port'
+                    type: string
+                  secret:
+                    description: |-
+                      Secret refers to a secret that provides the credentials.
+                      The secret should define AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+                    properties:
+                      name:
+                        description: name is unique within a namespace to reference
+                          a secret resource.
+                        type: string
+                      namespace:
+                        description: namespace defines the space within which the
+                          secret name must be unique.
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  targetBucket:
+                    description: TargetBucket is the name of the target bucket in
+                      the deep archive endpoint
+                    type: string
+                required:
+                - endpoint
+                - secret
+                - targetBucket
+                type: object
               googleCloudStorage:
                 description: GoogleCloudStorage specifies a namespace store of type
                   google-cloud-storage

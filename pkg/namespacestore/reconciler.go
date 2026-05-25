@@ -642,6 +642,13 @@ func (r *Reconciler) MakeExternalConnectionParams() (*nb.AddExternalConnectionPa
 		//Configure endPoint
 		conn.Endpoint = IBMCos.Endpoint
 
+	case nbv1.NSStoreTypeDeepArchive:
+		deepArchive := r.NamespaceStore.Spec.DeepArchive
+		conn.EndpointType = nb.EndpointTypeS3Compat
+		conn.Endpoint = deepArchive.Endpoint
+		conn.Identity = nb.MaskedString(r.Secret.StringData["AWS_ACCESS_KEY_ID"])
+		conn.Secret = nb.MaskedString(r.Secret.StringData["AWS_SECRET_ACCESS_KEY"])
+
 	case nbv1.NSStoreTypeAzureBlob:
 		conn.Endpoint = "https://blob.core.windows.net"
 		if util.IsAzureSTSClusterNS(r.NamespaceStore) {
