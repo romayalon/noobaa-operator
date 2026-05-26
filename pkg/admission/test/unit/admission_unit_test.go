@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	nbv1 "github.com/noobaa/noobaa-operator/v5/pkg/apis/noobaa/v1alpha1"
+	"github.com/noobaa/noobaa-operator/v5/pkg/bucketclass"
 	"github.com/noobaa/noobaa-operator/v5/pkg/bundle"
 	"github.com/noobaa/noobaa-operator/v5/pkg/util"
 	"github.com/noobaa/noobaa-operator/v5/pkg/validations"
@@ -1073,6 +1074,105 @@ var _ = Describe("BucketClass admission unit tests", func() {
 				}
 				err = validations.ValidateQuotaConfig(bc.Name, bc.Spec.Quota)
 				Ω(err).ShouldNot(HaveOccurred())
+			})
+		})
+		Context("Validate archivePolicy", func() {
+			It("Should Allow when archivePolicy is nil", func() {
+				bc.Spec.ArchivePolicy = nil
+				err = validations.ValidateArchivePolicy(bc)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+			It("Should Deny when archivePolicy is set without placementPolicy", func() {
+				bc.Spec.PlacementPolicy = nil
+				bc.Spec.ArchivePolicy = &nbv1.ArchivePolicy{
+					DeepArchiveResource: "my-deep-archive-ns",
+				}
+				err = validations.ValidateArchivePolicy(bc)
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("placementPolicy is required when archivePolicy is set"))
+			})
+			It("Should Deny when archivePolicy is set with only namespacePolicy (no placementPolicy)", func() {
+				bc.Spec.PlacementPolicy = nil
+				bc.Spec.NamespacePolicy = &nbv1.NamespacePolicy{
+					Type: nbv1.NSBucketClassTypeSingle,
+					Single: &nbv1.SingleNamespacePolicy{
+						Resource: "my-ns",
+					},
+				}
+				bc.Spec.ArchivePolicy = &nbv1.ArchivePolicy{
+					DeepArchiveResource: "my-deep-archive-ns",
+				}
+				err = validations.ValidateArchivePolicy(bc)
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("placementPolicy is required when archivePolicy is set"))
+			})
+			It("Should deny when archivePolicy references a NamespaceStore that does not exist", func() {
+				bc.Spec.PlacementPolicy = &nbv1.PlacementPolicy{
+					Tiers: []nbv1.Tier{{
+						Placement:     "",
+						BackingStores: []string{"bs-name"},
+					}},
+				}
+				bc.Spec.ArchivePolicy = &nbv1.ArchivePolicy{
+					DeepArchiveResource: "my-deep-archive-ns",
+				}
+				// Structural check (placementPolicy present) and uniqueness check pass.
+				// Then ValidateArchivePolicyNS fires: in a unit test environment there is
+				// no K8s API, so the NamespaceStore lookup fails with "does not exist".
+				err = validations.ValidateArchivePolicy(bc)
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("my-deep-archive-ns"))
+				Expect(err.Error()).To(ContainSubstring("does not exist"))
+			})
+			It("Should Allow when archivePolicy is set with empty DeepArchiveResource", func() {
+				bc.Spec.PlacementPolicy = &nbv1.PlacementPolicy{
+					Tiers: []nbv1.Tier{{
+						Placement:     "",
+						BackingStores: []string{"bs-name"},
+					}},
+				}
+				bc.Spec.ArchivePolicy = &nbv1.ArchivePolicy{
+					DeepArchiveResource: "",
+				}
+				err = validations.ValidateArchivePolicy(bc)
+				Ω(err).ShouldNot(HaveOccurred())
+			})
+		})
+	})
+})
+
+var _ = Describe("BucketClass CLI populate unit tests", func() {
+	Describe("PopulatePlacementBucketClass --deep-archive-resource flag", func() {
+		var (
+			cmd  = bucketclass.CmdCreatePlacementBucketClass()
+			spec *nbv1.BucketClassSpec
+		)
+
+		BeforeEach(func() {
+			cmd = bucketclass.CmdCreatePlacementBucketClass()
+			spec = &nbv1.BucketClassSpec{
+				PlacementPolicy: &nbv1.PlacementPolicy{Tiers: []nbv1.Tier{}},
+			}
+			Expect(cmd.Flags().Set("backingstores", "bs1")).To(Succeed())
+		})
+
+		Context("flag is provided", func() {
+			It("Should set ArchivePolicy on the spec", func() {
+				Expect(cmd.Flags().Set("deep-archive-resource", "my-da-ns")).To(Succeed())
+				nsArr, bsArr := bucketclass.PopulatePlacementBucketClass(cmd, spec)
+				Expect(spec.ArchivePolicy).NotTo(BeNil())
+				Expect(spec.ArchivePolicy.DeepArchiveResource).To(Equal("my-da-ns"))
+				Expect(nsArr).To(ContainElement("my-da-ns"))
+				Expect(bsArr).To(ContainElement("bs1"))
+			})
+		})
+
+		Context("flag is not provided", func() {
+			It("Should leave ArchivePolicy nil", func() {
+				nsArr, bsArr := bucketclass.PopulatePlacementBucketClass(cmd, spec)
+				Expect(spec.ArchivePolicy).To(BeNil())
+				Expect(nsArr).To(BeEmpty())
+				Expect(bsArr).To(ContainElement("bs1"))
 			})
 		})
 	})

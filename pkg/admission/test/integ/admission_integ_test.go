@@ -294,6 +294,60 @@ var _ = Describe("Admission server integration tests", func() {
 				Expect(err.Error()).To(ContainSubstring("VectorPolicy cannot be used together with PlacementPolicy or NamespacePolicy"))
 			})
 		})
+		Context("ArchivePolicy without PlacementPolicy", func() {
+			It("Should Deny", func() {
+				testBucketclass.Spec.ArchivePolicy = &nbv1.ArchivePolicy{
+					DeepArchiveResource: "da-ns",
+				}
+
+				result, err = KubeCreate(testBucketclass)
+				Expect(result).To(BeFalse())
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("placementPolicy is required when archivePolicy is set"))
+			})
+		})
+		Context("ArchivePolicy referencing a non-deep-archive NamespaceStore", func() {
+			var wrongTypeNS *nbv1.NamespaceStore
+
+			BeforeEach(func() {
+				wrongTypeNS = util.KubeObject(bundle.File_deploy_crds_noobaa_io_v1alpha1_namespacestore_cr_yaml).(*nbv1.NamespaceStore)
+				wrongTypeNS.Name = "s3-ns-wrong-type-archive-test"
+				wrongTypeNS.Namespace = namespace
+				wrongTypeNS.Spec = nbv1.NamespaceStoreSpec{
+					Type: nbv1.NSStoreTypeS3Compatible,
+					S3Compatible: &nbv1.S3CompatibleSpec{
+						TargetBucket: "first.bucket",
+						Endpoint:     "s3." + namespace + ".svc.cluster.local:443",
+						Secret: corev1.SecretReference{
+							Name:      "noobaa-admin",
+							Namespace: namespace,
+						},
+					},
+				}
+			})
+
+			AfterEach(func() {
+				KubeDelete(wrongTypeNS)
+			})
+
+			It("Should Deny - NamespaceStore type is not deep-archive", func() {
+				result, err = KubeCreate(wrongTypeNS)
+				Expect(result).To(BeTrue())
+				Ω(err).ShouldNot(HaveOccurred())
+
+				testBucketclass.Spec.PlacementPolicy = &nbv1.PlacementPolicy{
+					Tiers: []nbv1.Tier{{BackingStores: []string{"some-bs"}}},
+				}
+				testBucketclass.Spec.ArchivePolicy = &nbv1.ArchivePolicy{
+					DeepArchiveResource: wrongTypeNS.Name,
+				}
+
+				result, err = KubeCreate(testBucketclass)
+				Expect(result).To(BeFalse())
+				Ω(err).Should(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("deep-archive"))
+			})
+		})
 		Context("Pass create validations", func() {
 			It("Should Allow", func() {
 				testBackingstore.Spec = nbv1.BackingStoreSpec{
