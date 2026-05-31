@@ -73,13 +73,13 @@ func (bcv *ResourceValidator) ValidateCreateBC() {
 		}
 	}
 	if bc.Spec.NamespacePolicy != nil {
-		if err := validations.ValidateNSFSSingleBC(bc); err != nil && util.IsValidationError(err) {
+		if err := validations.ValidateNamespacePolicy(bc.Spec.NamespacePolicy, bc.Namespace); err != nil {
 			bcv.SetValidationResult(false, err.Error())
 			return
 		}
 	}
 	if bc.Spec.PlacementPolicy != nil {
-		if err := validations.ValidateTiersNumber(bc.Spec.PlacementPolicy.Tiers); err != nil {
+		if err := validations.ValidatePlacementPolicy(bc.Spec.PlacementPolicy, bc.Namespace); err != nil {
 			bcv.SetValidationResult(false, err.Error())
 			return
 		}

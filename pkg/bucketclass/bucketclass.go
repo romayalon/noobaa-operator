@@ -290,36 +290,6 @@ func createCommonBucketclass(cmd *cobra.Command, args []string, bucketClassType 
 		log.Fatalf(`❌ Bucket class validation failed %q`, err)
 	}
 
-	// check that namespace stores exists
-	for _, name := range namespaceStoresArr {
-		nsStore := &nbv1.NamespaceStore{
-			TypeMeta: metav1.TypeMeta{Kind: "NamespaceStore"},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: options.Namespace,
-			},
-		}
-		if !util.KubeCheck(nsStore) {
-			log.Fatalf(`❌ Could not get NamespaceStore %q in namespace %q`,
-				nsStore.Name, nsStore.Namespace)
-		}
-	}
-
-	// check that backing stores exists (for cache buckets)
-	for _, name := range backingStoresArr {
-		backStore := &nbv1.BackingStore{
-			TypeMeta: metav1.TypeMeta{Kind: "BackingStore"},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: options.Namespace,
-			},
-		}
-		if !util.KubeCheck(backStore) {
-			log.Fatalf(`❌ Could not get BackingStore %q in namespace %q`,
-				backStore.Name, backStore.Namespace)
-		}
-	}
-
 	replicationPolicyJSON, _ := cmd.Flags().GetString("replication-policy")
 	if replicationPolicyJSON != "" {
 		replication, err := util.LoadConfigurationJSON(replicationPolicyJSON)
