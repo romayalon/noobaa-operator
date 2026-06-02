@@ -385,6 +385,32 @@ func (r *Reconciler) UpdateBucketClass(bucketNames []string) error {
 		// return fmt.Errorf("Failed to update bucket class %q with error: %v - Reverting back", r.BucketClass.Name, result.ErrorMessage)
 	}
 
+	if err := r.updateArchivePolicyForBuckets(bucketNames); err != nil {
+		return err
+	}
+
 	log.Infof("✅ Successfully updated bucket class %q", r.BucketClass.Name)
+	return nil
+}
+
+// updateArchivePolicyForBuckets pushes the BucketClass archive policy to each affected bucket.
+// When the BucketClass has no archive policy, sends remove_archive_policy=true to remove any
+// existing policy from the buckets. When a policy is configured, sends it as the new policy.
+func (r *Reconciler) updateArchivePolicyForBuckets(bucketNames []string) error {
+	desiredConfig := ArchivePolicyFromSpec(&r.BucketClass.Spec)
+
+	for _, bucketName := range bucketNames {
+		params := nb.CreateBucketParams{Name: bucketName}
+		if desiredConfig == nil {
+			// will lead to orphaned objects on deep archive
+			params.RemoveArchivePolicy = true
+		} else {
+			params.ArchivePolicy = desiredConfig
+		}
+		if err := r.NBClient.UpdateBucketAPI(params); err != nil {
+			return fmt.Errorf("failed to update archive policy on bucket %q: %v", bucketName, err)
+		}
+	}
+	r.Logger.Infof("✅ Successfully updated archive policy for buckets %v", bucketNames)
 	return nil
 }

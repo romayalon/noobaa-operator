@@ -560,6 +560,7 @@ func (r *BucketRequest) CreateAndUpdateBucket(
 			return fmt.Errorf("CreateTieringStructure for PlacementPolicy failed to create policy %q with error: %v", tierName, err)
 		}
 		createBucketParams.Tiering = tierName
+		createBucketParams.ArchivePolicy = bucketclass.ArchivePolicyFromSpec(&r.BucketClass.Spec)
 	}
 
 	// create NS bucket
@@ -637,7 +638,48 @@ func (r *BucketRequest) UpdateBucket() error {
 		}
 	}
 
+	if err := r.updateBucketArchivePolicy(bucket); err != nil {
+		return err
+	}
+
 	log.Infof("✅ Successfully update bucket %q", r.BucketName)
+	return nil
+}
+
+// updateBucketArchivePolicy syncs the bucket's archive policy with the BucketClass spec.
+// No-op when the desired state already matches the current state.
+// Uses remove_archive_policy=true when the BucketClass no longer has an archive policy,
+// which instructs NooBaa to remove the existing policy from the bucket.
+func (r *BucketRequest) updateBucketArchivePolicy(bucket nb.BucketInfo) error {
+	log := r.Provisioner.Logger
+
+	desiredConfig := bucketclass.ArchivePolicyFromSpec(&r.BucketClass.Spec)
+
+	currentResource := ""
+	if bucket.ArchivePolicy != nil && bucket.ArchivePolicy.DeepArchiveResource != nil {
+		currentResource = bucket.ArchivePolicy.DeepArchiveResource.Resource
+	}
+	desiredResource := ""
+	if desiredConfig != nil && desiredConfig.DeepArchiveResource != nil {
+		desiredResource = desiredConfig.DeepArchiveResource.Resource
+	}
+
+	if currentResource == desiredResource {
+		log.Infof("UpdateBucket: no changes in archive policy")
+		return nil
+	}
+
+	params := nb.CreateBucketParams{Name: r.BucketName}
+	if desiredConfig == nil {
+		params.RemoveArchivePolicy = true
+	} else {
+		params.ArchivePolicy = desiredConfig
+	}
+
+	log.Infof("UpdateBucket: updating archive policy from %q to %q", currentResource, desiredResource)
+	if err := r.SysClient.NBClient.UpdateBucketAPI(params); err != nil {
+		return r.LogAndGetError("failed to update archive policy on bucket %q: %v", r.BucketName, err)
+	}
 	return nil
 }
 

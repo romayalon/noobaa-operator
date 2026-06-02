@@ -91,12 +91,13 @@ type BucketInfo struct {
 		Value      int64 `json:"value"`
 		LastUpdate int64 `json:"last_update"`
 	} `json:"num_objects,omitempty"`
-	Quota       *QuotaConfig `json:"quota,omitempty"`
+	Quota       *QuotaConfig         `json:"quota,omitempty"`
 	PolicyModes *struct {
 		ResiliencyStatus string `json:"resiliency_status"`
 		QuotaStatus      string `json:"quota_status"`
 	} `json:"policy_modes,omitempty"`
-	Namespace *NamespaceBucketInfo `json:"namespace,omitempty"`
+	Namespace     *NamespaceBucketInfo `json:"namespace,omitempty"`
+	ArchivePolicy *ArchivePolicyConfig `json:"archive_policy,omitempty"`
 	// TODO BucketInfo struct is partial ...
 }
 
@@ -338,14 +339,17 @@ type CreateSystemReply struct {
 	OperatorToken string `json:"operator_token"`
 }
 
-// CreateBucketParams is the params of bucket_api.create_bucket()
+// CreateBucketParams is the params of bucket_api.create_bucket() and bucket_api.update_bucket().
+// To remove an existing archive policy set RemoveArchivePolicy=true; to set one populate ArchivePolicy.
 type CreateBucketParams struct {
-	Name         string               `json:"name"`
-	Tiering      string               `json:"tiering,omitempty"`
-	ForceMd5Etag *bool                `json:"force_md5_etag,omitempty"`
-	BucketClaim  *BucketClaimInfo     `json:"bucket_claim,omitempty"`
-	Namespace    *NamespaceBucketInfo `json:"namespace,omitempty"`
-	Quota        *QuotaConfig         `json:"quota,omitempty"`
+	Name                string               `json:"name"`
+	Tiering             string               `json:"tiering,omitempty"`
+	ForceMd5Etag        *bool                `json:"force_md5_etag,omitempty"`
+	BucketClaim         *BucketClaimInfo     `json:"bucket_claim,omitempty"`
+	Namespace           *NamespaceBucketInfo `json:"namespace,omitempty"`
+	Quota               *QuotaConfig         `json:"quota,omitempty"`
+	ArchivePolicy       *ArchivePolicyConfig `json:"archive_policy,omitempty"`
+	RemoveArchivePolicy bool                 `json:"remove_archive_policy,omitempty"`
 }
 
 // QuotaConfig quota configuration
@@ -391,6 +395,12 @@ type NamespaceBucketInfo struct {
 type NamespaceResourceFullConfig struct {
 	Resource string `json:"resource"`
 	Path     string `json:"path,omitempty"`
+}
+
+// ArchivePolicyConfig represents the archive_policy API field.
+// DeepArchiveResource identifies the namespace resource (and optional path) used as the deep archive target.
+type ArchivePolicyConfig struct {
+	DeepArchiveResource *NamespaceResourceFullConfig `json:"deep_archive_resource,omitempty"`
 }
 
 // CacheSpec specifies the cache specifications for the bucket class

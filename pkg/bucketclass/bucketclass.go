@@ -866,6 +866,20 @@ func CreateNamespaceBucketInfoStructure(namespacePolicy nbv1.NamespacePolicy, pa
 	return namespaceBucketInfo
 }
 
+// ArchivePolicyFromSpec converts a BucketClassSpec.ArchivePolicy into an nb.ArchivePolicyConfig
+// suitable for the NooBaa create_bucket / update_bucket API calls.
+// Returns nil if no archive policy is configured or the resource name is empty.
+func ArchivePolicyFromSpec(spec *nbv1.BucketClassSpec) *nb.ArchivePolicyConfig {
+	if spec == nil || spec.ArchivePolicy == nil || spec.ArchivePolicy.DeepArchiveResource == "" {
+		return nil
+	}
+	return &nb.ArchivePolicyConfig{
+		DeepArchiveResource: &nb.NamespaceResourceFullConfig{
+			Resource: spec.ArchivePolicy.DeepArchiveResource,
+		},
+	}
+}
+
 // GetDefaultBucketClass will get the default bucket class
 func GetDefaultBucketClass(Namespace string) (*nbv1.BucketClass, error) {
 	bucketClassName := options.SystemName + "-default-bucket-class"
