@@ -402,6 +402,7 @@ func (r *Reconciler) ReconcileDeletion(systemFound bool) error {
 					}
 				}
 			}
+			r.deleteReusedExternalConnection()
 		}
 	}
 
@@ -423,6 +424,25 @@ func (r *Reconciler) hasOwnedExternalConnection() (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// deleteReusedExternalConnection attempts to delete the external connection that was
+// shared with this namespace store (matched by endpoint/identity during creation).
+// This handles the case where the connection was created by a different namespace store
+// and may now be orphaned. The delete is best-effort — IN_USE means another resource
+// still references it, which is fine.
+func (r *Reconciler) deleteReusedExternalConnection() {
+	if r.ExternalConnectionInfo == nil || r.ExternalConnectionInfo.Name == r.NamespaceStore.Name {
+		return
+	}
+	err := r.NBClient.DeleteExternalConnectionAPI(nb.DeleteExternalConnectionParams{Name: r.ExternalConnectionInfo.Name})
+	if err != nil {
+		if rpcErr, isRPCErr := err.(*nb.RPCError); isRPCErr && rpcErr.RPCCode == "IN_USE" {
+			r.Logger.Infof("Reused external connection %q is still in use, skipping deletion", r.ExternalConnectionInfo.Name)
+			return
+		}
+		r.Logger.Warnf("Failed to delete reused external connection %q: %v", r.ExternalConnectionInfo.Name, err)
+	}
 }
 
 // FinalizeDeletion removed the finalizer and updates in order to let the namespace-store get reclaimed by kubernetes
